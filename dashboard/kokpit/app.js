@@ -28,9 +28,9 @@ function kvHtml(rows) {
 function renderMetrics(snap) {
   const r = snap.report || {};
   const items = [
-    ["15 dk (canlı)", r.complete_15m_live_feed ?? "—"],
-    ["60 dk (canlı)", r.complete_60m_live_feed ?? "—"],
-    ["SHADOW_RISK", r.decisions_shadow_risk ?? 0],
+    ["15 dk · canlı veri gözlemi", r.complete_15m_live_feed ?? "—"],
+    ["60 dk · canlı veri gözlemi", r.complete_60m_live_feed ?? "—"],
+    ["Risk nedeniyle engellenen", r.decisions_shadow_risk ?? 0],
     ["Teknik blok", r.decisions_technical_block ?? 0],
     ["PAPER bakiye", `${snap.paper_balance_usdt ?? "—"} USDT`],
   ];
@@ -108,7 +108,7 @@ function renderShadow(snap) {
       </div>`;
     })
     .join("");
-  document.getElementById("shadow-body").innerHTML = summary + `<div class="cards" style="margin-top:0.75rem">${cards || "<p class=\"hint\">Kayıt yok</p>"}</div>`;
+  document.getElementById("shadow-body").innerHTML = summary + `<div class="cards shadow-records">${cards || "<p class=\"hint\">Kayıt yok</p>"}</div>`;
 }
 
 function renderDecisions(snap) {
@@ -133,25 +133,36 @@ function renderDecisions(snap) {
         <div class="card-meta">${esc(d.market_source)} · ${fmtTs(d.created_at)} · ${esc(expl)}</div>
       </div>`;
     })
-    .join("");
+    .join("") || '<p class="hint">Henüz karar kaydı yok. Kaynak bağlandığında kararlar burada görünecek.</p>';
 }
 
 function renderChain(snap) {
   const a = snap.anchor;
   if (!a) {
     document.getElementById("chain-body").innerHTML =
-      '<p class="hint">anchor_manifest.json yok. <code>python chain/anchor_job.py</code></p>';
+      '<p class="hint">Henüz zincir kanıtı üretilmedi. Bir kayıt sabitlendiğinde hash ve doğrulama bilgisi burada görünecek.</p>';
     return;
   }
-  const tx = a.snowtrace_tx
-    ? `<a href="${esc(a.snowtrace_tx)}" target="_blank" rel="noopener">Snowtrace</a>`
-    : "Plan B: yerel hash (Fuji tx bekleniyor)";
+  const tx = a.snowtrace_tx ? "Fuji işlem kaydı mevcut" : "Yerel hash · Fuji işlemi bekleniyor";
   document.getElementById("chain-body").innerHTML = kvHtml([
     ["sha256", (a.sha256 || "").slice(0, 16) + "…"],
     ["Karar sayısı", a.decision_count],
     ["Üretim", a.generated_at],
     ["Zincir", tx],
   ]);
+  if (a.snowtrace_tx) {
+    try {
+      const url = new URL(a.snowtrace_tx);
+      if (url.protocol === "https:") {
+        const link = document.createElement("a");
+        link.href = url.href;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = "İşlemi Snowtrace üzerinde doğrula ↗";
+        document.getElementById("chain-body").append(link);
+      }
+    } catch { /* A malformed proof URL must not interrupt the dashboard. */ }
+  }
 }
 
 function renderAll(snap) {
@@ -177,8 +188,15 @@ async function refresh() {
   try {
     const snap = await loadSnapshot();
     renderAll(snap);
+    document.getElementById("connection-status").hidden = true;
   } catch (e) {
-    document.getElementById("footer-updated").textContent = `Hata: ${e.message}`;
+    document.getElementById("footer-updated").textContent = "Güncelleme başarısız";
+    const status = document.getElementById("connection-status");
+    status.hidden = false;
+    status.textContent = `Veri yenilenemedi. Gösterilen kayıtlar güncel olmayabilir. ${e.message}`;
+    const badge = document.getElementById("worker-badge");
+    badge.className = "badge warn";
+    badge.textContent = "Bağlantı kontrol edilmeli";
   }
 }
 
@@ -186,6 +204,8 @@ document.getElementById("sim-form").addEventListener("submit", async (ev) => {
   ev.preventDefault();
   const text = document.getElementById("sim-input").value;
   const box = document.getElementById("sim-result");
+  const button = ev.currentTarget.querySelector("button[type=submit]");
+  button.disabled = true;
   box.textContent = "Simüle ediliyor…";
   try {
     const res = await fetch("/api/simulate-rule", {
@@ -200,7 +220,16 @@ document.getElementById("sim-form").addEventListener("submit", async (ev) => {
     )} · Makas: %${esc(data.effective.max_spread_fraction_pct)}`;
   } catch (e) {
     box.textContent = e.message;
+  } finally {
+    button.disabled = false;
   }
+});
+
+document.querySelectorAll("[data-prompt]").forEach((button) => {
+  button.addEventListener("click", () => {
+    document.getElementById("sim-input").value = button.dataset.prompt;
+    document.getElementById("sim-form").requestSubmit();
+  });
 });
 
 refresh();

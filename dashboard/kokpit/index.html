@@ -1,69 +1,38 @@
 <!DOCTYPE html>
 <html lang="tr">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Gölge Defter — Live Proof</title>
-    <link rel="stylesheet" href="/assets/styles.css" />
-  </head>
-  <body>
-    <header class="topbar">
-      <div class="brand">
-        <h1>GÖLGE DEFTER</h1>
-        <span class="sub">Live Proof</span>
-      </div>
-      <div class="badges">
-        <span class="badge paper">PAPER ONLY</span>
-        <span id="worker-badge" class="badge warn">Worker …</span>
-        <span id="rules-badge" class="badge muted">rules …</span>
-      </div>
-    </header>
-
-    <section class="metrics" id="metric-strip"></section>
-
-    <main class="grid">
-      <article class="panel" id="panel-system">
-        <h2>Canlı sistem</h2>
-        <div class="panel-body" id="system-body"></div>
-      </article>
-
-      <article class="panel" id="panel-constitution">
-        <h2>Yatırım Anayasası</h2>
-        <div class="panel-body" id="constitution-body"></div>
-      </article>
-
-      <article class="panel wide" id="panel-shadow">
-        <h2>Gölge Defter</h2>
-        <div class="panel-body" id="shadow-body"></div>
-      </article>
-
-      <article class="panel wide" id="panel-analyst">
-        <h2>Analist kararları</h2>
-        <div class="chips" id="decision-chips"></div>
-        <div class="panel-body cards" id="decisions-body"></div>
-      </article>
-
-      <article class="panel wide" id="panel-sim">
-        <h2>Kullanıcı kuralı simülasyonu</h2>
-        <p class="hint">DB yazmaz. Teslim demosu: &quot;Bakiyemin %80'i ile al&quot; veya makas sıkılaştırma.</p>
-        <form id="sim-form" class="sim-form">
-          <input id="sim-input" type="text" value="Bakiyemin %80'i ile al" autocomplete="off" />
-          <button type="submit">Simüle et</button>
-        </form>
-        <div id="sim-result" class="sim-result"></div>
-      </article>
-
-      <article class="panel" id="panel-chain">
-        <h2>Zincir kanıtı</h2>
-        <div class="panel-body" id="chain-body"></div>
-      </article>
-    </main>
-
-    <footer class="footer">
-      <span id="footer-db"></span>
-      <span id="footer-updated"></span>
-      <span>Salt okunur · Worker döngüsü burada çalışmaz</span>
-    </footer>
-    <script src="/assets/app.js" defer></script>
-  </body>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Yapay zekâ kararlarını deterministik yatırım kurallarıyla denetleyen PAPER kontrol masası." />
+  <title>Gölge Defter — Kararın diğer yüzü</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231c2925'/%3E%3Cpath d='M18 16h28v8H26v16h12v-7H32v-7h14v22H18z' fill='%23c5edaa'/%3E%3C/svg%3E" />
+  <link rel="stylesheet" href="/assets/styles.css" />
+</head>
+<body>
+<a class="skip" href="#main">İçeriğe geç</a>
+<header class="topbar">
+  <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">g.</span><span>gölge defter<span class="sub">Yatırım anayasası & karar hafızası</span></span></a>
+  <nav aria-label="Ana gezinme"><a href="#main">Kontrol masası</a><a href="#panel-shadow">Gölge kayıtlar</a><a href="#panel-constitution">Anayasa</a></nav>
+  <div class="badges"><span class="badge paper">PAPER / MOCK</span><span id="worker-badge" class="badge warn">Bağlantı bekleniyor</span><span id="rules-badge" class="badge muted">rules …</span></div>
+</header>
+<main id="main" class="workspace">
+  <section class="hero">
+    <div><div class="eyebrow">OKX TR × Team1 Türkiye · Agentic Hackathon</div><h1>Her sinyal bir işlem<br>olmak zorunda değil<span>.</span></h1><p>Yapay zekâ önerir. Anayasa sınırlar.<br>Gölge Defter, alınmayan kararların izini tutar.</p><a class="text-link" href="#panel-sim">Anayasayı test et <span>↗</span></a></div>
+    <aside class="flow" aria-label="Karar denetim akışı"><div class="flow-title"><span>Kararın yolculuğu</span><span class="mono">01 → 04</span></div><div class="flow-step"><span class="step-no">01</span><div><strong>Piyasa verisi</strong><small>OKX ATK · Salt okunur kaynak</small></div><span>↘</span></div><div class="flow-step"><span class="step-no">02</span><div><strong>Analist ajan</strong><small>BUY / PASS + açıklanabilir gerekçe</small></div><span>↘</span></div><div class="flow-step accent-step"><span class="step-no">03</span><div><strong>Yatırım Anayasası</strong><small>Deterministik kurallar · Sınırlı yetki</small></div><span>↘</span></div><div class="flow-branches"><div><span>04 / ONAY</span><strong>PAPER icra ↗</strong></div><div><span>04 / ENGEL VEYA PAS</span><strong>Gölge Defter ↗</strong></div></div><p class="flow-note">Gerçek emir yok. Karar ve gözlem var.</p></aside>
+  </section>
+  <section aria-label="Sistem özeti" class="metrics" id="metric-strip"><div class="loading">Kontrol masası verileri yükleniyor…</div></section>
+  <div id="connection-status" class="connection-status" role="status" hidden></div>
+  <div class="section-heading"><div><span class="eyebrow">Karar laboratuvarı</span><h2>Kurallar sözde kalmasın.</h2></div><span class="section-note">Salt okunur kokpit · 20 sn yenileme</span></div>
+  <div class="grid">
+    <article class="panel simulation" id="panel-sim"><div class="panel-heading"><span class="index">01 / DENE</span><h2>Anayasaya meydan oku</h2></div><p class="hint">Bir talep yaz. Sistem, değiştirilemeyen sınırları nasıl koruduğunu göstersin.</p><form id="sim-form" class="sim-form"><label for="sim-input">Yatırım talebin</label><div class="input-row"><input id="sim-input" type="text" value="Bakiyemin %80'i ile al" autocomplete="off" required /><button type="submit">Test et ↗</button></div></form><div class="presets" aria-label="Örnek talepler"><button type="button" data-prompt="Bakiyemin %80'i ile al">%80 ile al</button><button type="button" data-prompt="Bakiyemin %10'u ile al">Tavanı %10 yap</button></div><div id="sim-result" class="sim-result" role="status">Sonuç burada görünecek. Bu deneme veritabanına yazılmaz.</div><div class="simulation-foot">MOCK / SIMULATED <span>Yetki kullanıcıda. Sınır anayasada.</span></div></article>
+    <article class="panel" id="panel-constitution"><div class="panel-heading"><span class="index">02 / DENETLE</span><h2>Yatırım Anayasası</h2></div><p class="hint">Kurallar yalnızca sıkılaştırılabilir.</p><div class="panel-body" id="constitution-body"></div></article>
+    <article class="panel" id="panel-analyst"><div class="panel-heading"><span class="index">03 / İNCELE</span><h2>Karar akışı</h2></div><div class="chips" id="decision-chips"></div><div class="panel-body cards" id="decisions-body"><p class="hint">Kararlar yükleniyor…</p></div></article>
+    <article class="panel" id="panel-shadow"><div class="panel-heading"><span class="index">04 / TAKİP ET</span><h2>Gölge Defter</h2></div><p class="hint">İşleme dönüşmeyen adaylara 15 ve 60 dakika sonra yeniden bakılır. Karşı-olgusal sonuçlar kesin önlenen zarar değildir.</p><div class="panel-body" id="shadow-body"></div></article>
+    <article class="panel utility" id="panel-system"><div class="panel-heading"><span class="index">SİSTEM</span><h2>Veri & bağlantı</h2></div><div class="panel-body" id="system-body"></div></article>
+    <article class="panel utility" id="panel-chain"><div class="panel-heading"><span class="index">DOĞRULANABİLİRLİK</span><h2>Zincir kanıtı</h2></div><div class="panel-body" id="chain-body"></div></article>
+  </div>
+</main>
+<footer class="footer"><span class="footer-brand">gölge defter <small>Kararın diğer yüzü.</small></span><div><span id="footer-db"></span><span id="footer-updated">Bağlantı kuruluyor…</span><span>PAPER simülasyonu · Gerçek emir gönderilmez</span></div></footer>
+<script src="/assets/app.js" defer></script>
+</body>
 </html>
