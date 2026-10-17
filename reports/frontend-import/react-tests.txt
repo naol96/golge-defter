@@ -1,0 +1,15 @@
+
+> golge-defter-web@1.0.0 test
+> vitest run
+
+
+ RUN  v3.2.4 /home/hazar/golge-defter/web
+
+ ✓ src/lib/format.test.ts (8 tests) 3ms
+ ✓ src/api/integration.test.tsx (5 tests) 14ms
+
+ Test Files  2 passed (2)
+      Tests  13 passed (13)
+   Start at  15:55:39
+   Duration  394ms (transform 139ms, setup 0ms, collect 202ms, tests 17ms, environment 0ms, prepare 153ms)
+

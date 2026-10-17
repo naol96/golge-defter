@@ -1,0 +1,25 @@
+{
+  "result": "PASS",
+  "browser": "Headless Chrome",
+  "kpis": [
+    "Toplam karar\n436\n1 PAPER onayı · %78 gölgede",
+    "Anayasal risk engeli\n180\nKural ihlali nedeniyle durdurulan",
+    "Teknik engel\n159\nMinimum emir · risk değil",
+    "ATK kökenli 15 / 60 dk gözlem\n305 / 205\n168 ölçüm bekliyor",
+    "PAPER bakiye\n37,49\nUSDT · 1 açık pozisyon",
+    "Son karar\n28 sn\n● ATK canlı kaynağı"
+  ],
+  "checks": [
+    "live data + five routes",
+    "decision drawer focus + Escape",
+    "shadow source labels",
+    "real simulation API %80 → %25",
+    "unverified blockchain label",
+    "offline preserves data, no automatic demo",
+    "explicit demo + live return",
+    "theme switch + persistence",
+    "390px mobile overview/table containment",
+    "zero uncaught JavaScript exceptions"
+  ],
+  "screenshots": 6
+}

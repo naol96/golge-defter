@@ -1,0 +1,13 @@
+
+> golge-defter-web@1.0.0 build
+> tsc -b && vite build
+
+vite v6.4.1 building for production...
+transforming...
+✓ 38 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html            1.37 kB │ gzip:  0.79 kB
+dist/index-7hTGmHGb.css   31.66 kB │ gzip:  7.29 kB
+dist/index-CnkUzAZF.js   212.06 kB │ gzip: 68.63 kB
+✓ built in 534ms

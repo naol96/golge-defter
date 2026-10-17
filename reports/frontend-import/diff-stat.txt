@@ -1,0 +1,48 @@
+ README.md                                          |    3 +-
+ dashboard/analytics.py                             |  181 ++
+ dashboard/serve_kokpit.py                          |   49 +-
+ .../2026-10-17-faz-react-frontend-entegrasyon.md   |  120 +
+ reports/frontend-import/browser-check.mjs          |   80 +
+ reports/frontend-import/browser-check.txt          |   25 +
+ reports/frontend-import/build.txt                  |   13 +
+ reports/frontend-import/classic-ui-tests.txt       |   13 +
+ reports/frontend-import/constitution.png           |  Bin 0 -> 166460 bytes
+ reports/frontend-import/demo.txt                   |    6 +
+ reports/frontend-import/desktop-dark.png           |  Bin 0 -> 149646 bytes
+ reports/frontend-import/desktop-light.png          |  Bin 0 -> 149202 bytes
+ reports/frontend-import/http-smoke.txt             |   10 +
+ reports/frontend-import/mobile-dark.png            |  Bin 0 -> 65563 bytes
+ reports/frontend-import/mobile-decisions.png       |  Bin 0 -> 64094 bytes
+ reports/frontend-import/pytest.txt                 |    6 +
+ reports/frontend-import/react-tests.txt            |   15 +
+ reports/frontend-import/shadow-table.png           |  Bin 0 -> 144657 bytes
+ reports/frontend-import/source.json                |   20 +
+ reports/jury-audit/probe_atk.py                    |    3 +-
+ scripts/start_kokpit.sh                            |    7 +-
+ tests/test_analytics.py                            |  116 +
+ web/.gitignore                                     |    3 +
+ web/README.md                                      |   64 +
+ web/index.html                                     |   24 +
+ web/package-lock.json                              | 2343 ++++++++++++++++++++
+ web/package.json                                   |   26 +
+ web/src/App.tsx                                    |  534 +++++
+ web/src/api/client.ts                              |   62 +
+ web/src/api/demo.ts                                |  273 +++
+ web/src/api/integration.test.tsx                   |   45 +
+ web/src/api/types.ts                               |  155 ++
+ web/src/components/charts.tsx                      |  404 ++++
+ web/src/components/constitution.tsx                |  255 +++
+ web/src/components/layout.tsx                      |  220 ++
+ web/src/components/tables.tsx                      |  501 +++++
+ web/src/components/ui.tsx                          |  244 ++
+ web/src/hooks.ts                                   |  206 ++
+ web/src/lib/format.test.ts                         |   64 +
+ web/src/lib/format.ts                              |  109 +
+ web/src/lib/labels.ts                              |  114 +
+ web/src/main.tsx                                   |   11 +
+ web/src/styles/app.css                             | 2055 +++++++++++++++++
+ web/src/styles/tokens.css                          |  109 +
+ web/src/vite-env.d.ts                              |    4 +
+ web/tsconfig.json                                  |   19 +
+ web/vite.config.ts                                 |   15 +
+ 47 files changed, 8515 insertions(+), 11 deletions(-)

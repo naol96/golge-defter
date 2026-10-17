@@ -10,10 +10,12 @@ from urllib.parse import parse_qs, urlparse
 
 from contracts.models import ConstitutionRules
 from core.user_rules import apply_user_request
+from dashboard.analytics import build_analytics
 from dashboard.snapshot import build_kokpit_snapshot, resolve_db_path
 
 ROOT = Path(__file__).resolve().parents[1]
 STATIC = Path(__file__).resolve().parent / "kokpit"
+WEB_DIST = ROOT / "web" / "dist"
 DEFAULT_DB = "data/golge.db"
 
 
@@ -23,7 +25,10 @@ def _json_response(handler: BaseHTTPRequestHandler, status: int, payload: dict) 
     handler.send_header("Content-Type", "application/json; charset=utf-8")
     handler.send_header("Content-Length", str(len(body)))
     handler.end_headers()
-    handler.wfile.write(body)
+    try:
+        handler.wfile.write(body)
+    except (BrokenPipeError, ConnectionResetError):
+        pass  # The React poll was cancelled by navigation or a mode change.
 
 
 class KokpitHandler(BaseHTTPRequestHandler):
@@ -52,14 +57,35 @@ class KokpitHandler(BaseHTTPRequestHandler):
                 _json_response(self, 400, {"error": str(exc)})
             return
 
+        if path == "/api/analytics":
+            qs = parse_qs(parsed.query)
+            db_q = qs.get("db", [DEFAULT_DB])[0]
+            if db_q.startswith("/") or ".." in db_q:
+                _json_response(self, 400, {"error": "Invalid db path"})
+                return
+            try:
+                resolve_db_path(db_q)
+                payload = build_analytics(
+                    db_q, hours=int(qs.get("hours", ["3"])[0]),
+                    bucket_minutes=int(qs.get("bucket", ["10"])[0]),
+                    limit=int(qs.get("limit", ["200"])[0]),
+                )
+                _json_response(self, 200, payload)
+            except FileNotFoundError as exc:
+                _json_response(self, 404, {"error": str(exc)})
+            except (ValueError, SystemExit) as exc:
+                _json_response(self, 400, {"error": str(exc)})
+            return
+
+        static = getattr(self.server, "static_dir", WEB_DIST)
         if path == "/" or path == "/index.html":
-            self._serve_file(STATIC / "index.html")
+            self._serve_file(static / "index.html")
             return
 
         if path.startswith("/assets/"):
             rel = path.removeprefix("/assets/")
-            target = (STATIC / rel).resolve()
-            if not str(target).startswith(str(STATIC.resolve())):
+            target = (static / rel).resolve()
+            if not target.is_relative_to(static.resolve()):
                 self.send_error(403)
                 return
             if target.is_file():
@@ -113,20 +139,27 @@ class KokpitHandler(BaseHTTPRequestHandler):
         ):
             self.send_header("Cache-Control", "no-store")
         self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            pass  # Client disconnected before the response completed.
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Gölge Defter kokpit (read-only)")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8501)
+    parser.add_argument("--ui", choices=("web", "classic"), default="web",
+                        help="web: React frontend; classic: previous HTML cockpit")
     args = parser.parse_args()
 
-    if not STATIC.is_dir():
-        raise SystemExit(f"Missing static UI: {STATIC}")
+    static = WEB_DIST if args.ui == "web" else STATIC
+    if not (static / "index.html").is_file():
+        raise SystemExit(f"Missing UI build: {static}. Run: cd web && npm ci && npm run build")
 
     httpd = ThreadingHTTPServer((args.host, args.port), KokpitHandler)
-    print(f"Kokpit http://{args.host}:{args.port}  db={DEFAULT_DB}  (read-only)")
+    httpd.static_dir = static
+    print(f"Kokpit http://{args.host}:{args.port}  ui={args.ui}  db={DEFAULT_DB}  (read-only)")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

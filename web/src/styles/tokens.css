@@ -1,0 +1,109 @@
+/* Design tokens. Light is defined on :root; dark redefines the same tokens under
+   the OS preference (unless the user forced light) and under an explicit toggle. */
+:root {
+  color-scheme: light;
+  --font-sans: "Inter var", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  --page: #f3f4ee;
+  --surface: #fbfbf7;
+  --surface-2: #f0f2ea;
+  --surface-3: #e6e9df;
+  --line: #dde1d5;
+  --line-strong: #c4cabb;
+  --ink: #17231d;
+  --ink-2: #4a5a51;
+  --ink-3: #78857d;
+  --brand: #1c2925;
+  --brand-ink: #c5edaa;
+  --accent: #3f7a1f;
+  --accent-soft: #e2f3d2;
+  --focus: #5b8f37;
+
+  --pos: #006300;
+  --neg: #c22f2f;
+  --warn: #8a5a00;
+  --warn-soft: #fdf1d6;
+  --danger-soft: #fbe5e3;
+  --ok-soft: #e1f2df;
+
+  /* Decision series (validated: adjacent CVD ΔE ≥ 9.2 light / 9.4 dark). */
+  --s-approved: #1baf7a;
+  --s-risk: #eb6834;
+  --s-pass: #2a78d6;
+  --s-technical: #eda100;
+
+  --grid: #e3e6dc;
+  --axis: #c4cabb;
+
+  --radius-sm: 6px;
+  --radius: 12px;
+  --radius-lg: 18px;
+  --shadow: 0 1px 0 rgba(23, 35, 29, 0.04), 0 8px 24px -12px rgba(23, 35, 29, 0.18);
+  --shadow-pop: 0 18px 50px -12px rgba(10, 20, 15, 0.35);
+  --ring: 0 0 0 3px color-mix(in srgb, var(--focus) 45%, transparent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0e1311;
+    --surface: #151c19;
+    --surface-2: #1b2420;
+    --surface-3: #232e29;
+    --line: #26312c;
+    --line-strong: #364540;
+    --ink: #eef2ea;
+    --ink-2: #b5c0b8;
+    --ink-3: #85928a;
+    --brand: #c5edaa;
+    --brand-ink: #13201a;
+    --accent: #b6e590;
+    --accent-soft: #24331f;
+    --focus: #b6e590;
+    --pos: #3cc43c;
+    --neg: #f07171;
+    --warn: #f3bf4a;
+    --warn-soft: #3a2f14;
+    --danger-soft: #3b1d1d;
+    --ok-soft: #173020;
+    --s-approved: #199e70;
+    --s-risk: #d95926;
+    --s-pass: #3987e5;
+    --s-technical: #c98500;
+    --grid: #222c27;
+    --axis: #364540;
+    --shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 10px 30px -14px rgba(0, 0, 0, 0.7);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0e1311;
+  --surface: #151c19;
+  --surface-2: #1b2420;
+  --surface-3: #232e29;
+  --line: #26312c;
+  --line-strong: #364540;
+  --ink: #eef2ea;
+  --ink-2: #b5c0b8;
+  --ink-3: #85928a;
+  --brand: #c5edaa;
+  --brand-ink: #13201a;
+  --accent: #b6e590;
+  --accent-soft: #24331f;
+  --focus: #b6e590;
+  --pos: #3cc43c;
+  --neg: #f07171;
+  --warn: #f3bf4a;
+  --warn-soft: #3a2f14;
+  --danger-soft: #3b1d1d;
+  --ok-soft: #173020;
+  --s-approved: #199e70;
+  --s-risk: #d95926;
+  --s-pass: #3987e5;
+  --s-technical: #c98500;
+  --grid: #222c27;
+  --axis: #364540;
+  --shadow: 0 1px 0 rgba(0, 0, 0, 0.3), 0 10px 30px -14px rgba(0, 0, 0, 0.7);
+}

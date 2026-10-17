@@ -8,6 +8,11 @@ if [[ ! -x "$PY" ]]; then
   PY=python3
 fi
 
+if [[ ! -f web/dist/index.html ]]; then
+  echo "Frontend build missing. Run: cd web && npm ci && npm run build" >&2
+  exit 1
+fi
+
 mkdir -p logs data
 PIDFILE="data/kokpit.pid"
 
@@ -30,7 +35,7 @@ else
 fi
 sleep 1
 
-nohup "$PY" -m dashboard.serve_kokpit --host 127.0.0.1 --port 8501 \
+nohup "$PY" -m dashboard.serve_kokpit --host 127.0.0.1 --port 8501 --ui web \
   >> logs/kokpit.log 2>&1 &
 echo $! > "$PIDFILE"
 echo "Kokpit http://127.0.0.1:8501 (pid $(cat "$PIDFILE"))"

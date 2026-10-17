@@ -45,7 +45,8 @@ python -m golge_defter.demo
 python main.py --source atk --symbol BTC-USDT
 python report.py --db data/golge.db
 bash start_atk.sh   # arka planda ATK_LIVE_MARKET worker
-bash scripts/start_kokpit.sh          # koyu tema kokpit → http://127.0.0.1:8501
+npm --prefix web ci && npm --prefix web run build  # gönderilen React frontend
+bash scripts/start_kokpit.sh          # React kokpit → http://127.0.0.1:8501
 streamlit run dashboard/kokpit_proof.py  # yedek (Streamlit)
 ```
 

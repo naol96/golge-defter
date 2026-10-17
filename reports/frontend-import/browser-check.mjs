@@ -1,0 +1,80 @@
+// Requires a disposable headless Chrome with --remote-debugging-port=9223.
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+const tabs = await fetch('http://127.0.0.1:9223/json/list').then(r=>r.json());
+const tab=tabs.find(t=>t.type==='page');
+const ws=new WebSocket(tab.webSocketDebuggerUrl);
+await new Promise((resolve,reject)=>{ws.addEventListener('open',resolve,{once:true});ws.addEventListener('error',reject,{once:true})});
+let seq=0;const pending=new Map(), errors=[];
+ws.addEventListener('message',e=>{const m=JSON.parse(e.data);if(m.id){const p=pending.get(m.id);if(!p)return;pending.delete(m.id);m.error?p.reject(m.error):p.resolve(m.result)}else if(m.method==='Runtime.exceptionThrown'){errors.push(m.params.exceptionDetails)}});
+function cdp(method,params={}){return new Promise((resolve,reject)=>{const id=++seq;pending.set(id,{resolve,reject});ws.send(JSON.stringify({id,method,params}));setTimeout(()=>{if(pending.delete(id))reject(new Error('CDP timeout '+method))},10000).unref()})}
+async function evaluate(expression){const res=await cdp('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(res.exceptionDetails)throw Error(JSON.stringify(res.exceptionDetails));return res.result.value}
+async function wait(expression){for(let i=0;i<100;i++){if(await evaluate(expression))return;await new Promise(r=>setTimeout(r,100))}throw Error('Timed out: '+expression)}
+async function navigate(url){await cdp('Page.navigate',{url});await wait('document.readyState === "complete" && !!document.querySelector(".topbar")')}
+async function route(hash){await evaluate(`location.hash=${JSON.stringify('/'+hash)}`);await new Promise(r=>setTimeout(r,180))}
+async function screenshot(name){const image=await cdp('Page.captureScreenshot',{format:'png',captureBeyondViewport:false});fs.writeFileSync('reports/frontend-import/'+name,Buffer.from(image.data,'base64'))}
+await cdp('Page.enable');await cdp('Runtime.enable');await cdp('Network.enable');
+await cdp('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+await cdp('Emulation.setDeviceMetricsOverride',{width:1440,height:1000,deviceScaleFactor:1,mobile:false});
+await navigate('http://127.0.0.1:8501/');
+await wait('document.querySelectorAll(".kpi-value").length === 6 && !document.querySelector(".banner-error")');
+assert.equal(await evaluate('document.documentElement.dataset.theme'),'dark');
+const kpis=await evaluate('[...document.querySelectorAll(".kpi")].map(el=>el.innerText)');
+await screenshot('desktop-dark.png');
+await route('kararlar');
+await wait('document.querySelectorAll("tbody tr").length > 0');
+await evaluate('document.querySelector(".row-link").click()');await wait('!!document.querySelector(".drawer")');
+await evaluate('document.querySelector(".drawer button").focus()');
+const focusBefore=await evaluate('document.activeElement?.outerHTML');
+await new Promise(r=>setTimeout(r,1300));
+assert.equal(await evaluate('document.activeElement?.outerHTML'),focusBefore,'clock update must not steal drawer focus');
+for(let i=0;i<15;i++)await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Tab',code:'Tab',windowsVirtualKeyCode:9});
+assert(await evaluate('document.querySelector(".drawer").contains(document.activeElement)'));
+await cdp('Input.dispatchKeyEvent',{type:'keyDown',key:'Escape',code:'Escape',windowsVirtualKeyCode:27});
+await wait('!document.querySelector(".drawer")');
+await route('golge');await wait('document.querySelectorAll("tbody tr").length > 0');
+assert(await evaluate('document.body.innerText.includes("Sinyal:")'));
+await screenshot('shadow-table.png');
+await route('anayasa');
+await evaluate('document.querySelector("#sim-input").form.requestSubmit()');
+await wait('document.querySelector(".verdict")?.innerText.includes("%25")');
+assert(await evaluate('document.body.innerText.includes("daha küçük limit uygulanır")'));
+assert(await evaluate('document.body.innerText.includes("Parite bazında")'));
+await screenshot('constitution.png');
+await route('sistem');
+assert(await evaluate('document.body.innerText.includes("Doğrulanmış blockchain kanıtı yok")'));
+await route('genel');
+await cdp('Network.emulateNetworkConditions',{offline:true,latency:0,downloadThroughput:0,uploadThroughput:0});
+await evaluate("[...document.querySelectorAll('button')].find(el=>el.title==='Yenile (R)').click()");
+await wait('!!document.querySelector(".banner-error")');
+assert(await evaluate('document.querySelectorAll(".kpi-value").length === 6'));
+assert.equal(await evaluate('!!document.querySelector(".banner-demo")'),false);
+await cdp('Network.emulateNetworkConditions',{offline:false,latency:0,downloadThroughput:-1,uploadThroughput:-1});
+await evaluate("[...document.querySelectorAll('button')].find(el=>el.title==='Yenile (R)').click()");
+await wait('!document.querySelector(".banner-error")');
+await navigate('http://127.0.0.1:8501/?demo=1');
+await wait('!!document.querySelector(".banner-demo") && document.querySelectorAll(".kpi-value").length === 6');
+assert(await evaluate('document.body.innerText.includes("Sentetik")'));
+await route('golge');
+assert(await evaluate('[...document.querySelectorAll("tbody tr")].some(el=>el.innerText.includes("Sentetik"))'));
+await evaluate('[...document.querySelectorAll("button")].find(el=>el.innerText==="Canlı veriye dön").click()');
+await wait('!document.querySelector(".banner-demo") && document.querySelectorAll(".rings").length > 0 && !document.querySelector(".banner-error")');
+await route('genel');
+await evaluate("[...document.querySelectorAll('button')].find(el=>el.title==='Tema değiştir (T)').click()");
+assert.notEqual(await evaluate('document.documentElement.dataset.theme'),'dark');
+await evaluate('localStorage.setItem("golge-theme","light")');
+await navigate('http://127.0.0.1:8501/');await wait('document.querySelectorAll(".kpi-value").length === 6');
+assert.equal(await evaluate('document.documentElement.dataset.theme'),'light');
+await screenshot('desktop-light.png');
+await evaluate('localStorage.setItem("golge-theme","dark")');
+await navigate('http://127.0.0.1:8501/');await wait('document.querySelectorAll(".kpi-value").length === 6');
+await cdp('Emulation.setDeviceMetricsOverride',{width:390,height:844,deviceScaleFactor:1,mobile:true});
+await new Promise(r=>setTimeout(r,250));
+assert(await evaluate('document.documentElement.scrollWidth <= innerWidth + 1'),'mobile must not overflow the page');
+await screenshot('mobile-dark.png');
+await route('kararlar');
+assert(await evaluate('document.documentElement.scrollWidth <= innerWidth + 1'),'mobile table must scroll inside its container');
+await screenshot('mobile-decisions.png');
+assert.equal(errors.length,0,JSON.stringify(errors));
+console.log(JSON.stringify({result:'PASS',browser:'Headless Chrome',kpis,checks:['live data + five routes','decision drawer focus + Escape','shadow source labels','real simulation API %80 → %25','unverified blockchain label','offline preserves data, no automatic demo','explicit demo + live return','theme switch + persistence','390px mobile overview/table containment','zero uncaught JavaScript exceptions'],screenshots:6},null,2));
+ws.close();

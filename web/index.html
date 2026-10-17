@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="tr" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Yapay zekâ kararlarını deterministik yatırım kurallarıyla denetleyen PAPER kontrol masası." />
+    <meta name="color-scheme" content="light dark" />
+    <title>Gölge Defter — Kokpit</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231c2925'/%3E%3Ctext x='32' y='42' font-family='system-ui' font-weight='700' font-size='30' text-anchor='middle' fill='%23c5edaa'%3Eg.%3C/text%3E%3C/svg%3E" />
+    <script>
+      // Apply the saved theme before first paint to avoid a flash.
+      try {
+        var t = localStorage.getItem("golge-theme");
+        if (t === "light" || t === "dark") document.documentElement.dataset.theme = t;
+        else if (t === "system") delete document.documentElement.dataset.theme;
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript>Gölge Defter kokpiti JavaScript gerektirir.</noscript>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,20 @@
+{
+  "archive": "/home/hazar/İndirilenler/Telegram Desktop/frontend.zip",
+  "sha256": "28eb684e660a1091dcc140b47f5d2ca2444bec3912f3dd70b142b3cae10c90dd",
+  "imported": [
+    "web source/config/lockfile",
+    "dashboard read-only analytics module and adapted tests"
+  ],
+  "excluded": [
+    "archived core/backend replacements",
+    ".git",
+    ".env",
+    ".venv",
+    "node_modules",
+    "data/golge.db",
+    "evidence",
+    "prebuilt dist"
+  ],
+  "frontend": "React 18 + TypeScript + Vite",
+  "backend": "existing Python PAPER MVP"
+}

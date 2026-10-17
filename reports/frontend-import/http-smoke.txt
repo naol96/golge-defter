@@ -1,0 +1,10 @@
+{
+  "result": "PASS",
+  "url": "http://127.0.0.1:8501",
+  "html": "React root",
+  "javascript_asset": "/assets/index-CnkUzAZF.js",
+  "snapshot": "200 JSON",
+  "analytics": "200 JSON",
+  "simulation": "%80 -> %25",
+  "mutating_worker_calls": 0
+}

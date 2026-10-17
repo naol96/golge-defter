@@ -44,7 +44,8 @@ try:
             with urlopen(base + "/api/snapshot?" + urlencode({"db": str(relative_db)}), timeout=3) as response:
                 snap = json.load(response)
             with urlopen(base + "/", timeout=3) as response:
-                assert 'id="shadow-body"' in response.read().decode()
+                html = response.read().decode()
+                assert 'id="root"' in html or 'id="shadow-body"' in html
         finally:
             server.shutdown()
             server.server_close()
