@@ -40,18 +40,19 @@ def run_cycle(
         rules, _, msg = apply_user_request(rules, user_rule)
         logging.info("user_rule: %s", msg)
     for symbol in symbols:
-        now = int(time.time())
-        day = utc_day(now)
         try:
             market = adapter.fetch_snapshot(symbol)
         except Exception as exc:
             logging.warning("MARKET_UNAVAILABLE %s: %s", symbol, exc)
             continue
+        now = int(time.time())
+        db.get_day_start_balance(utc_day(now))
+        monitor_open_positions(db, market, now, utc_day(now))
         signal = resolve_signal(market, analyst=analyst)
+        now = int(time.time())
         decision, ref_id = run_decision_cycle(
             db, rules=rules, signal=signal, market=market, now=now
         )
-        monitor_open_positions(db, market, now, day)
         evaluate_due_shadows(db, market, now)
         logging.info(
             "cycle symbol=%s source=%s decision=%s rule=%s ref=%s",

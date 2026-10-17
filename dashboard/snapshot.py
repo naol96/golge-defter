@@ -41,7 +41,11 @@ def _load_anchor_manifest() -> dict | None:
     if not path.is_file():
         return None
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            return None
+        # A manifest / explorer URL alone cannot verify a chain receipt or hash.
+        return {**data, "blockchain_verified": False, "proof_kind": "LOCAL_SHA256"}
     except json.JSONDecodeError:
         return None
 
@@ -60,11 +64,12 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
         raise FileNotFoundError(f"DB bulunamadı: {path}")
 
     rules = ConstitutionRules()
-    report = build_report(path)
 
     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
     try:
+        conn.execute("BEGIN")
+        report = build_report(path, connection=conn)
         bal = conn.execute("SELECT balance_usdt FROM paper_state WHERE id=1").fetchone()
         paper_balance = str(bal[0]) if bal else None
 
@@ -85,8 +90,16 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
 
         recent_shadow = conn.execute(
             """
-            SELECT st.id AS shadow_id, st.symbol, st.category, se.horizon_minutes,
-                   se.status, se.pnl_usdt, se.feed_source, se.evaluated_at, st.created_at
+            SELECT st.id AS shadow_id, st.symbol, st.category AS raw_category,
+                   CASE WHEN st.constitution_rule IN ('OBSERVATION','MIN_ORDER')
+                        THEN 'TECHNICAL_UNEXECUTABLE' ELSE st.category END AS category,
+                   se.horizon_minutes, se.status, se.pnl_usdt, se.feed_source,
+                   se.evaluated_at, st.created_at, st.source AS entry_source,
+                   CASE WHEN se.horizon_minutes=15 THEN st.target_15_at ELSE st.target_60_at END AS target_at,
+                   se.note,
+                   COALESCE((SELECT GROUP_CONCAT(DISTINCT d.signal_origin) FROM decisions d
+                       WHERE d.ref_id=st.id AND d.status IN ('SHADOW_RISK','SHADOW_PASS','TECHNICAL_BLOCK')
+                         AND d.symbol=st.symbol), 'UNKNOWN') AS signal_origin
             FROM shadow_evaluations se
             JOIN shadow_trades st ON st.id = se.shadow_id
             ORDER BY COALESCE(se.evaluated_at, 0) DESC, st.id DESC, se.horizon_minutes DESC
@@ -94,13 +107,11 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
             """
         ).fetchall()
 
-        decisions_by_status = conn.execute(
-            "SELECT status, COUNT(*) AS c FROM decisions GROUP BY status ORDER BY c DESC"
-        ).fetchall()
-
         recent_decisions = conn.execute(
             """
-            SELECT id, symbol, signal_origin, signal_action, status, rule,
+            SELECT id, symbol, signal_origin, signal_action, status AS raw_status,
+                   CASE WHEN status='SHADOW_RISK' AND rule IN ('OBSERVATION','MIN_ORDER')
+                        THEN 'TECHNICAL_BLOCK' ELSE status END AS status, rule,
                    market_source, explanation, created_at, rules_version
             FROM decisions ORDER BY id DESC LIMIT 15
             """
@@ -139,6 +150,7 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
         "max_spread_pct": float(rules.max_spread_fraction * 100),
         "stop_loss_pct": float(rules.stop_loss_fraction * 100),
         "gunluk_zarar_pct": float(rules.max_daily_realized_loss_fraction * 100),
+        "gunluk_zarar_usdt": str(rules.max_daily_realized_loss_usdt),
         "bekleme_dk": rules.pair_cooldown_seconds // 60,
         "gozlem_esigi_usdt": str(rules.observation_min_balance_usdt),
         "rules_version_code": rules.rules_version,
@@ -156,7 +168,7 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
         "paper_balance_usdt": paper_balance,
         "open_positions": [_row_dict(r) for r in open_positions],
         "eval_breakdown": eval_breakdown,
-        "decisions_summary": {r["status"]: int(r["c"]) for r in decisions_by_status},
+        "decisions_summary": report["decisions_by_status"],
         "recent_shadow": [_row_dict(r) for r in recent_shadow],
         "recent_decisions": [_row_dict(r) for r in recent_decisions],
         "anchor": _load_anchor_manifest(),

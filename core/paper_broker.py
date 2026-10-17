@@ -14,6 +14,8 @@ def open_paper_position(
     rules: ConstitutionRules,
     now: int,
 ) -> Position:
+    if not market.is_usable(now, rules.max_data_age_seconds):
+        raise ValueError("unusable market data; PAPER open rejected")
     entry = market.ask
     qty = notional_usdt / entry
     fee = notional_usdt * DEFAULT_FEE_RATE
@@ -25,10 +27,10 @@ def open_paper_position(
         cur = conn.execute(
             """
             INSERT INTO positions
-            (symbol, entry_price, notional_usdt, quantity, stop_loss_price, opened_at, status, mode)
-            VALUES (?, ?, ?, ?, ?, ?, 'OPEN', 'PAPER')
+            (symbol, entry_price, notional_usdt, quantity, stop_loss_price, opened_at, status, mode, market_source)
+            VALUES (?, ?, ?, ?, ?, ?, 'OPEN', 'PAPER', ?)
             """,
-            (market.symbol, str(entry), str(notional_usdt), str(qty), str(stop), now),
+            (market.symbol, str(entry), str(notional_usdt), str(qty), str(stop), now, market.source),
         )
         pos_id = int(cur.lastrowid)
         conn.execute(

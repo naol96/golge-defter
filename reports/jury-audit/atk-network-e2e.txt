@@ -1,0 +1,33 @@
+{
+  "probe": "ACTUAL_READ_ONLY_ATK_TO_ISOLATED_PAPER_DASHBOARD",
+  "elapsed_s": 1.986,
+  "market": {
+    "symbol": "AVAX-USDT",
+    "bid": "9.948",
+    "ask": "9.951",
+    "captured_at": 1792239057,
+    "source": "ATK_LIVE_MARKET",
+    "min_order_usdt": "0.9951",
+    "age_s": 1
+  },
+  "signal_origin": "DEMO",
+  "status": "APPROVED_PAPER",
+  "rule": "OK",
+  "notional_usdt": "25.00",
+  "dashboard_counts": {
+    "APPROVED_PAPER": 1
+  },
+  "paper_positions": 1,
+  "shadow_evaluations": {
+    "15": {
+      "PENDING": 0,
+      "COMPLETE": 0
+    },
+    "60": {
+      "PENDING": 0,
+      "COMPLETE": 0
+    }
+  },
+  "live_orders_sent": 0,
+  "notes": "DEMO signal, not LLM; no synthetic 15/60 result and no worker DB writes."
+}

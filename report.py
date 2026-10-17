@@ -41,14 +41,26 @@ def _ensure_schema(db_path: Path) -> None:
         )
 
 
-def build_report(db_path: Path) -> dict:
-    _ensure_schema(db_path)
-    conn = sqlite3.connect(db_path)
+def build_report(db_path: Path, *, connection: sqlite3.Connection | None = None) -> dict:
+    if connection is None:
+        _ensure_schema(db_path)
+    conn = connection if connection is not None else sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
     conn.row_factory = sqlite3.Row
+    if connection is None:
+        conn.execute("BEGIN")
     try:
-        decisions = _count_by(conn, "decisions", "status")
+        decisions = {str(r[0]): int(r[1]) for r in conn.execute("""
+            SELECT CASE WHEN status='SHADOW_RISK' AND rule IN ('OBSERVATION','MIN_ORDER')
+                        THEN 'TECHNICAL_BLOCK' ELSE status END AS effective_status, COUNT(*)
+            FROM decisions GROUP BY effective_status
+        """)}
+        signal_origins = _count_by(conn, "decisions", "signal_origin")
         market_sources = _count_by(conn, "decisions", "market_source")
-        shadow_by_cat = _count_by(conn, "shadow_trades", "category")
+        shadow_by_cat = {str(r[0]): int(r[1]) for r in conn.execute("""
+            SELECT CASE WHEN constitution_rule IN ('OBSERVATION','MIN_ORDER')
+                        THEN 'TECHNICAL_UNEXECUTABLE' ELSE category END AS effective_category, COUNT(*)
+            FROM shadow_trades GROUP BY effective_category
+        """)}
         shadow_by_source = _count_by(conn, "shadow_trades", "source")
         eval_status = _count_by(conn, "shadow_evaluations", "status")
         pending = conn.execute(
@@ -63,6 +75,7 @@ def build_report(db_path: Path) -> dict:
             JOIN shadow_trades st ON st.id = se.shadow_id
             WHERE se.horizon_minutes=15 AND se.status='COMPLETE'
               AND se.feed_source IN ('ATK_LIVE_MARKET', 'ATK')
+              AND st.source IN ('ATK_LIVE_MARKET', 'ATK')
             """
         ).fetchone()[0]
         complete_60 = conn.execute(
@@ -76,6 +89,7 @@ def build_report(db_path: Path) -> dict:
             JOIN shadow_trades st ON st.id = se.shadow_id
             WHERE se.horizon_minutes=60 AND se.status='COMPLETE'
               AND st.source IN ('ATK_LIVE_MARKET', 'ATK')
+              AND se.feed_source IN ('ATK_LIVE_MARKET', 'ATK')
             """
         ).fetchone()[0]
         last_decision = conn.execute(
@@ -88,12 +102,14 @@ def build_report(db_path: Path) -> dict:
             "SELECT COUNT(*) FROM positions WHERE status = 'OPEN'"
         ).fetchone()[0]
     finally:
-        conn.close()
+        if connection is None:
+            conn.close()
 
     return {
         "db": str(db_path),
         "decisions_by_status": decisions,
         "decisions_by_market_source": market_sources,
+        "decisions_by_signal_origin": signal_origins,
         "shadow_by_category": shadow_by_cat,
         "shadow_by_feed_source": shadow_by_source,
         "evaluations_by_status": eval_status,
@@ -109,6 +125,10 @@ def build_report(db_path: Path) -> dict:
         "open_paper_positions": int(open_positions),
         "notes": [
             "PAPER only; no LIVE orders.",
+            "ATK market data does not imply an LLM signal; signal origins are counted separately.",
+            "Legacy OBSERVATION/MIN_ORDER risk rows are counted as technical without rewriting stored records.",
+            "COMPLETE counts include all categories; technical observations are not risk protection metrics.",
+            "Live-feed counts require both entry and exit from ATK; they are not verified LLM performance.",
             "FIXTURE/MOCK counts are not live market proof.",
             "Pending 15/60 rows are normal until horizon elapses; feed_source fills on COMPLETE.",
             "TECHNICAL_BLOCK/MIN_ORDER: constitutional notional (25% of balance) below adapter min order (~10 USDT), not a risk veto.",
@@ -128,6 +148,9 @@ def format_markdown(report: dict) -> str:
         lines.append(f"- {key}: {count}")
     lines.extend(["", "## Kararlar (piyasa kaynağı)"])
     for key, count in sorted(report["decisions_by_market_source"].items()):
+        lines.append(f"- {key}: {count}")
+    lines.extend(["", "## Sinyal kökeni"])
+    for key, count in sorted(report["decisions_by_signal_origin"].items()):
         lines.append(f"- {key}: {count}")
     lines.extend(
         [

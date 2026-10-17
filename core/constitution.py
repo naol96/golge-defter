@@ -28,7 +28,8 @@ def _number(value: Decimal, name: str) -> Decimal:
 def _daily_loss_limit(constitution: ConstitutionRules, day_start_balance_usdt: Decimal | None) -> Decimal:
     if day_start_balance_usdt is not None:
         base = _number(day_start_balance_usdt, "day_start_balance_usdt")
-        return base * constitution.max_daily_realized_loss_fraction
+        return min(base * constitution.max_daily_realized_loss_fraction,
+                   constitution.max_daily_realized_loss_usdt)
     return _number(constitution.max_daily_realized_loss_usdt, "max_daily_realized_loss_usdt")
 
 
@@ -103,17 +104,7 @@ def evaluate(
         raise ValueError("open_position_count must be nonnegative")
 
     amount = balance * constitution.max_position_fraction
-    nil = DecisionResult(
-        "NO_DECISION",
-        "DATA",
-        "Güvenilir piyasa verisi olmadan karar verilmedi.",
-        amount,
-        None,
-        None,
-    )
-    if not isinstance(now, int) or not isinstance(market.captured_at, int):
-        return nil
-    if market.captured_at > now or now - market.captured_at > constitution.max_data_age_seconds:
+    if not market.is_usable(now, constitution.max_data_age_seconds):
         return DecisionResult(
             "NO_DECISION",
             "DATA",
@@ -144,6 +135,15 @@ def evaluate(
             amount,
             spread,
             None,
+        )
+
+    # Executability precedes risk/PASS classification: an impossible order is
+    # never an eligible risk opportunity, even when other vetoes also apply.
+    if amount < minimum:
+        return DecisionResult(
+            "TECHNICAL_BLOCK", "MIN_ORDER",
+            "Anayasal tutar borsa minimum emrinin altında; teknik kayıt.",
+            amount, spread, ShadowCategory.TECHNICAL_UNEXECUTABLE,
         )
 
     if signal.action == "PASS":
@@ -189,16 +189,6 @@ def evaluate(
                 ShadowCategory.CONSTITUTIONAL_RISK_BLOCK,
             )
 
-    if balance < constitution.observation_min_balance_usdt and amount < minimum:
-        return DecisionResult(
-            "SHADOW_RISK",
-            "OBSERVATION",
-            "Bakiye gözlem eşiğinde; %25 tavan minimum emri karşılamıyor.",
-            amount,
-            spread,
-            ShadowCategory.CONSTITUTIONAL_RISK_BLOCK,
-        )
-
     if open_position_count >= constitution.max_open_positions:
         return DecisionResult(
             "SHADOW_RISK",
@@ -228,16 +218,6 @@ def evaluate(
             amount,
             spread,
             ShadowCategory.CONSTITUTIONAL_RISK_BLOCK,
-        )
-
-    if amount < minimum:
-        return DecisionResult(
-            "TECHNICAL_BLOCK",
-            "MIN_ORDER",
-            "Anayasal tutar borsa minimum emrinin altında.",
-            amount,
-            spread,
-            ShadowCategory.TECHNICAL_UNEXECUTABLE,
         )
 
     return DecisionResult(

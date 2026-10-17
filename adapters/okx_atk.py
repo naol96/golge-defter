@@ -24,7 +24,11 @@ class OkxAtkMarketAdapter(MarketAdapter):
         self.min_order_usdt = min_order_usdt
         self.timeout_seconds = timeout_seconds
 
-    def _call_tool(self, name: str, arguments: dict) -> dict:
+    def _call_tool(self, name: str, arguments: dict, *, timeout_seconds: float | None = None) -> dict:
+        budget = self.timeout_seconds if timeout_seconds is None else timeout_seconds
+        if budget <= 0:
+            raise TimeoutError("OKX ATK snapshot deadline exceeded")
+        deadline = time.monotonic() + budget
         cmd = [
             "npx",
             "-y",
@@ -39,7 +43,7 @@ class OkxAtkMarketAdapter(MarketAdapter):
             cmd,
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
             text=True,
             bufsize=0,
         )
@@ -50,6 +54,8 @@ class OkxAtkMarketAdapter(MarketAdapter):
             proc.stdin.flush()
 
         def read_line(timeout: float) -> str | None:
+            if timeout <= 0:
+                return None
             q: Queue[str | Exception] = Queue()
 
             def worker() -> None:
@@ -84,7 +90,7 @@ class OkxAtkMarketAdapter(MarketAdapter):
                     },
                 }
             )
-            if not read_line(self.timeout_seconds):
+            if not read_line(deadline - time.monotonic()):
                 raise TimeoutError("OKX ATK MCP initialize timeout")
             send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
             send(
@@ -95,7 +101,7 @@ class OkxAtkMarketAdapter(MarketAdapter):
                     "params": {"name": name, "arguments": arguments},
                 }
             )
-            line = read_line(self.timeout_seconds)
+            line = read_line(deadline - time.monotonic())
             if not line:
                 raise TimeoutError(f"OKX ATK MCP tool timeout: {name}")
             payload = json.loads(line)
@@ -112,48 +118,54 @@ class OkxAtkMarketAdapter(MarketAdapter):
         finally:
             proc.terminate()
             try:
-                proc.wait(timeout=1)
+                proc.wait(timeout=0.1)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait()
+            proc.stdin.close()
+            proc.stdout.close()
 
-    def _instrument_min_order_usdt(self, symbol: str, ask: Decimal) -> Decimal:
-        try:
-            inst = self._call_tool(
-                "market_get_instruments", {"instType": "SPOT", "instId": symbol}
-            )
-            row = (inst.get("data") or {}).get("data") or []
-            if not row:
-                return self.min_order_usdt
-            spec = row[0]
-            min_sz = Decimal(str(spec.get("minSz") or "0"))
-            lot_sz_raw = spec.get("lotSz")
-            lot_sz = Decimal(str(lot_sz_raw)) if lot_sz_raw else None
-            if min_sz <= 0:
-                return self.min_order_usdt
-            return min_notional_usdt(ask, min_sz, lot_sz_base=lot_sz)
-        except Exception:
-            return self.min_order_usdt
+    def _instrument_min_order_usdt(self, symbol: str, ask: Decimal, *, timeout_seconds: float) -> Decimal:
+        inst = self._call_tool(
+            "market_get_instruments", {"instType": "SPOT", "instId": symbol},
+            timeout_seconds=timeout_seconds,
+        )
+        rows = (inst.get("data") or {}).get("data") or []
+        if not rows or rows[0].get("instId", symbol) != symbol:
+            raise RuntimeError("instrument minimum unavailable or mismatched")
+        spec = rows[0]
+        min_sz = Decimal(str(spec.get("minSz") or "0"))
+        lot_sz = Decimal(str(spec.get("lotSz") or "0"))
+        if not min_sz.is_finite() or not lot_sz.is_finite() or min_sz <= 0 or lot_sz <= 0:
+            raise RuntimeError("invalid instrument minimum; no assumed fallback")
+        return min_notional_usdt(ask, min_sz, lot_sz_base=lot_sz)
 
     def fetch_snapshot(self, symbol: str) -> MarketSnapshot:
-        data = self._call_tool("market_get_ticker", {"instId": symbol})
+        deadline = time.monotonic() + self.timeout_seconds
+        data = self._call_tool("market_get_ticker", {"instId": symbol},
+                               timeout_seconds=deadline - time.monotonic())
         row = (data.get("data") or {}).get("data") or []
         if not row:
             raise RuntimeError("ticker missing data")
         tick = row[0]
-        fetched_at = int(time.time())
+        if tick.get("instId", symbol) != symbol:
+            raise RuntimeError("ticker symbol mismatch")
         raw_ts = int(tick.get("ts") or 0)
-        if raw_ts > 10_000_000_000:
-            tick_at = int(raw_ts / 1000)
-        elif raw_ts > 1_000_000_000:
-            tick_at = raw_ts
-        else:
-            tick_at = fetched_at
-        captured_at = tick_at if abs(fetched_at - tick_at) <= 10 else fetched_at
+        if raw_ts <= 0:
+            raise RuntimeError("ticker timestamp missing; no fresh-time fallback")
+        captured_at = raw_ts // 1000 if raw_ts > 10_000_000_000 else raw_ts
         ask = Decimal(str(tick["askPx"]))
-        min_order = self._instrument_min_order_usdt(symbol, ask)
+        bid = Decimal(str(tick["bidPx"]))
+        if not ask.is_finite() or not bid.is_finite() or not 0 < bid <= ask:
+            raise RuntimeError("invalid ticker prices")
+        min_order = self._instrument_min_order_usdt(
+            symbol, ask, timeout_seconds=deadline - time.monotonic()
+        )
+        if time.monotonic() > deadline:
+            raise TimeoutError("OKX ATK snapshot deadline exceeded")
         return MarketSnapshot(
             symbol=symbol,
-            bid=Decimal(str(tick["bidPx"])),
+            bid=bid,
             ask=ask,
             captured_at=captured_at,
             source="ATK_LIVE_MARKET",

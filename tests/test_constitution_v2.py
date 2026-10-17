@@ -59,9 +59,10 @@ def test_daily_loss_uses_percent_of_day_start():
     assert d.rule == "DAILY_LOSS"
 
 
-def test_observation_when_sub_40_and_below_min_order():
+def test_sub_40_minimum_is_technical_not_risk():
     d = _buy(balance="35", day_start="35")
-    assert d.rule == "OBSERVATION"
+    assert d.rule == "MIN_ORDER"
+    assert d.status == "TECHNICAL_BLOCK"
 
 
 def test_technical_min_order_when_balance_above_observation_threshold():

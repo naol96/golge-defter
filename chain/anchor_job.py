@@ -14,13 +14,39 @@ from pathlib import Path
 def _decision_digest(conn: sqlite3.Connection, limit: int) -> str:
     rows = conn.execute(
         """
-        SELECT id, symbol, status, rule, market_source, created_at
+        SELECT *
         FROM decisions ORDER BY id DESC LIMIT ?
         """,
         (limit,),
     ).fetchall()
     payload = json.dumps(rows, separators=(",", ":"), ensure_ascii=False)
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def build_manifest(db_path: Path, limit: int = 200, label: str = "golge_batch") -> dict:
+    if limit <= 0:
+        raise ValueError("batch limit must be positive")
+    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+    try:
+        conn.execute("BEGIN")
+        digest = _decision_digest(conn, limit)
+        total = conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
+    finally:
+        conn.close()
+    return {
+        "label": label,
+        "db": str(db_path.resolve()),
+        "decision_count": min(total, limit),
+        "total_decision_count": total,
+        "batch_limit": limit,
+        "sha256": digest,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "fuji_contract": os.environ.get("FUJI_ANCHOR_CONTRACT", ""),
+        "snowtrace_tx": os.environ.get("FUJI_LAST_TX", ""),
+        "proof_kind": "LOCAL_SHA256",
+        "blockchain_verified": False,
+        "note": "Local decision-batch SHA-256 only. Any supplied chain URL is unverified; no receipt/hash verification is implemented.",
+    }
 
 
 def main() -> None:
@@ -31,25 +57,7 @@ def main() -> None:
     parser.add_argument("--label", default="golge_batch")
     args = parser.parse_args()
 
-    db_path = Path(args.db)
-    conn = sqlite3.connect(db_path)
-    try:
-        digest = _decision_digest(conn, args.limit)
-        count = conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
-    finally:
-        conn.close()
-
-    manifest = {
-        "label": args.label,
-        "db": str(db_path.resolve()),
-        "decision_count": count,
-        "batch_limit": args.limit,
-        "sha256": digest,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "fuji_contract": os.environ.get("FUJI_ANCHOR_CONTRACT", ""),
-        "snowtrace_tx": os.environ.get("FUJI_LAST_TX", ""),
-        "note": "Set FUJI_* env after on-chain anchor; worker DB is read-only here.",
-    }
+    manifest = build_manifest(Path(args.db), args.limit, args.label)
 
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)

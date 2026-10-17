@@ -21,7 +21,7 @@ def run_decision_cycle(
     market: MarketSnapshot,
     now: int | None = None,
 ) -> tuple[DecisionResult, int | None]:
-    now = int(now or time.time())
+    now = int(time.time()) if now is None else now
     day = utc_day(now)
     daily_loss = db.get_daily_loss(day)
     day_start_balance = db.get_day_start_balance(day)
@@ -41,6 +41,11 @@ def run_decision_cycle(
         last_pair_close_at=last_close,
         day_start_balance_usdt=day_start_balance,
     )
+    if signal.origin == "LLM" and signal.reason.startswith("LLM_FAIL_CLOSED:"):
+        decision = DecisionResult(
+            "NO_DECISION", "SIGNAL", signal.reason,
+            decision.notional_usdt, decision.spread_fraction, None,
+        )
     ref_id: int | None = None
     if decision.shadow_category is not None:
         ref_id = db.insert_shadow(

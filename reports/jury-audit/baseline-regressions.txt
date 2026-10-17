@@ -1,0 +1,411 @@
+FFFFFFF.FFFFFFFFFFFFFFFF                                                 [100%]
+=================================== FAILURES ===================================
+_______ test_unexecutable_is_technical_before_risk_or_pass[30-99.9-BUY] ________
+
+action = 'BUY', balance = '30', bid = '99.9'
+
+    @pytest.mark.parametrize("action", ["BUY", "PASS"])
+    @pytest.mark.parametrize("balance,bid", [("30", "99.9"), ("30", "90"), ("50", "90")])
+    def test_unexecutable_is_technical_before_risk_or_pass(action, balance, bid):
+        tick = market(bid=bid, minimum="15")
+        decision = evaluate(constitution=ConstitutionRules(),
+            signal=AnalystSignal(tick.symbol, action, "audit"), market=tick,
+            available_usdt=D(balance), min_order_usdt=tick.min_order_usdt,
+            daily_realized_loss_usdt=D("5"), now=NOW)
+>       assert decision.status == "TECHNICAL_BLOCK"
+E       AssertionError: assert 'SHADOW_RISK' == 'TECHNICAL_BLOCK'
+E         
+E         - TECHNICAL_BLOCK
+E         + SHADOW_RISK
+
+tests/test_jury_audit.py:40: AssertionError
+_______ test_unexecutable_is_technical_before_risk_or_pass[30-99.9-PASS] _______
+
+action = 'PASS', balance = '30', bid = '99.9'
+
+    @pytest.mark.parametrize("action", ["BUY", "PASS"])
+    @pytest.mark.parametrize("balance,bid", [("30", "99.9"), ("30", "90"), ("50", "90")])
+    def test_unexecutable_is_technical_before_risk_or_pass(action, balance, bid):
+        tick = market(bid=bid, minimum="15")
+        decision = evaluate(constitution=ConstitutionRules(),
+            signal=AnalystSignal(tick.symbol, action, "audit"), market=tick,
+            available_usdt=D(balance), min_order_usdt=tick.min_order_usdt,
+            daily_realized_loss_usdt=D("5"), now=NOW)
+>       assert decision.status == "TECHNICAL_BLOCK"
+E       AssertionError: assert 'SHADOW_PASS' == 'TECHNICAL_BLOCK'
+E         
+E         - TECHNICAL_BLOCK
+E         + SHADOW_PASS
+
+tests/test_jury_audit.py:40: AssertionError
+________ test_unexecutable_is_technical_before_risk_or_pass[30-90-BUY] _________
+
+action = 'BUY', balance = '30', bid = '90'
+
+    @pytest.mark.parametrize("action", ["BUY", "PASS"])
+    @pytest.mark.parametrize("balance,bid", [("30", "99.9"), ("30", "90"), ("50", "90")])
+    def test_unexecutable_is_technical_before_risk_or_pass(action, balance, bid):
+        tick = market(bid=bid, minimum="15")
+        decision = evaluate(constitution=ConstitutionRules(),
+            signal=AnalystSignal(tick.symbol, action, "audit"), market=tick,
+            available_usdt=D(balance), min_order_usdt=tick.min_order_usdt,
+            daily_realized_loss_usdt=D("5"), now=NOW)
+>       assert decision.status == "TECHNICAL_BLOCK"
+E       AssertionError: assert 'SHADOW_RISK' == 'TECHNICAL_BLOCK'
+E         
+E         - TECHNICAL_BLOCK
+E         + SHADOW_RISK
+
+tests/test_jury_audit.py:40: AssertionError
+________ test_unexecutable_is_technical_before_risk_or_pass[30-90-PASS] ________
+
+action = 'PASS', balance = '30', bid = '90'
+
+    @pytest.mark.parametrize("action", ["BUY", "PASS"])
+    @pytest.mark.parametrize("balance,bid", [("30", "99.9"), ("30", "90"), ("50", "90")])
+    def test_unexecutable_is_technical_before_risk_or_pass(action, balance, bid):
+        tick = market(bid=bid, minimum="15")
+        decision = evaluate(constitution=ConstitutionRules(),
+            signal=AnalystSignal(tick.symbol, action, "audit"), market=tick,
+            available_usdt=D(balance), min_order_usdt=tick.min_order_usdt,
+            daily_realized_loss_usdt=D("5"), now=NOW)
+>       assert decision.status == "TECHNICAL_BLOCK"
+E       AssertionError: assert 'SHADOW_PASS' == 'TECHNICAL_BLOCK'
+E         
+E         - TECHNICAL_BLOCK
+E         + SHADOW_PASS
+
+tests/test_jury_audit.py:40: AssertionError
+________ test_unexecutable_is_technical_before_risk_or_pass[50-90-BUY] _________
+
+action = 'BUY', balance = '50', bid = '90'
+
+    @pytest.mark.parametrize("action", ["BUY", "PASS"])
+    @pytest.mark.parametrize("balance,bid", [("30", "99.9"), ("30", "90"), ("50", "90")])
+    def test_unexecutable_is_technical_before_risk_or_pass(action, balance, bid):
+        tick = market(bid=bid, minimum="15")
+        decision = evaluate(constitution=ConstitutionRules(),
+            signal=AnalystSignal(tick.symbol, action, "audit"), market=tick,
+            available_usdt=D(balance), min_order_usdt=tick.min_order_usdt,
+            daily_realized_loss_usdt=D("5"), now=NOW)
+>       assert decision.status == "TECHNICAL_BLOCK"
+E       AssertionError: assert 'SHADOW_RISK' == 'TECHNICAL_BLOCK'
+E         
+E         - TECHNICAL_BLOCK
+E         + SHADOW_RISK
+
+tests/test_jury_audit.py:40: AssertionError
+________ test_unexecutable_is_technical_before_risk_or_pass[50-90-PASS] ________
+
+action = 'PASS', balance = '50', bid = '90'
+
+    @pytest.mark.parametrize("action", ["BUY", "PASS"])
+    @pytest.mark.parametrize("balance,bid", [("30", "99.9"), ("30", "90"), ("50", "90")])
+    def test_unexecutable_is_technical_before_risk_or_pass(action, balance, bid):
+        tick = market(bid=bid, minimum="15")
+        decision = evaluate(constitution=ConstitutionRules(),
+            signal=AnalystSignal(tick.symbol, action, "audit"), market=tick,
+            available_usdt=D(balance), min_order_usdt=tick.min_order_usdt,
+            daily_realized_loss_usdt=D("5"), now=NOW)
+>       assert decision.status == "TECHNICAL_BLOCK"
+E       AssertionError: assert 'SHADOW_PASS' == 'TECHNICAL_BLOCK'
+E         
+E         - TECHNICAL_BLOCK
+E         + SHADOW_PASS
+
+tests/test_jury_audit.py:40: AssertionError
+__________________ test_atk_preserves_exchange_timestamp[11] ___________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f022ad8e780>
+age = 11
+
+    @pytest.mark.parametrize("age", [11, -1])
+    def test_atk_preserves_exchange_timestamp(monkeypatch, age):
+        monkeypatch.setattr("adapters.okx_atk.time.time", lambda: NOW)
+        adapter = OkxAtkMarketAdapter()
+        def tool(name, args, **kwargs):
+            rows = [{"ts": str((NOW-age)*1000), "bidPx": "99.9", "askPx": "100"}] if name == "market_get_ticker" else [{"minSz":"0.01","lotSz":"0.01"}]
+            return {"ok":True,"data":{"data":rows}}
+        monkeypatch.setattr(adapter, "_call_tool", tool)
+>       assert adapter.fetch_snapshot("AVAX-USDT").captured_at == NOW-age
+E       AssertionError: assert 1800000000 == (1800000000 - 11)
+E        +  where 1800000000 = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000000, source='ATK_LIVE_MARKET', min_order_usdt=Decimal('1.0000')).captured_at
+E        +    where MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000000, source='ATK_LIVE_MARKET', min_order_usdt=Decimal('1.0000')) = fetch_snapshot('AVAX-USDT')
+E        +      where fetch_snapshot = <adapters.okx_atk.OkxAtkMarketAdapter object at 0x7f022afa1a90>.fetch_snapshot
+
+tests/test_jury_audit.py:52: AssertionError
+___________________ test_atk_missing_timestamp_is_not_fresh ____________________
+
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7f022b0b7d10>
+
+    def test_atk_missing_timestamp_is_not_fresh(monkeypatch):
+        adapter=OkxAtkMarketAdapter()
+        monkeypatch.setattr(adapter, "_call_tool", lambda *a, **kw: {"data":{"data":[{"bidPx":"99.9","askPx":"100"}]}})
+>       with pytest.raises((ValueError, RuntimeError)):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE any of (ValueError, RuntimeError)
+
+tests/test_jury_audit.py:58: Failed
+______________ test_invalid_market_cannot_complete_shadow[tick0] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_com0')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000889, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW+900-11), market(at=NOW+901), market(at=NOW+900,bid="101"), market(at=NOW+900,bid="0")])
+    def test_invalid_market_cannot_complete_shadow(tmp_path, tick):
+        db=Database(tmp_path/"audit.db"); shadow(db)
+>       assert evaluate_due_shadows(db,tick,NOW+900) == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = evaluate_due_shadows(<storage.database.Database object at 0x7f022afa1fd0>, MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000889, source='MOCK', min_order_usdt=Decimal('10')), (1800000000 + 900))
+
+tests/test_jury_audit.py:65: AssertionError
+______________ test_invalid_market_cannot_complete_shadow[tick1] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_com1')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000901, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW+900-11), market(at=NOW+901), market(at=NOW+900,bid="101"), market(at=NOW+900,bid="0")])
+    def test_invalid_market_cannot_complete_shadow(tmp_path, tick):
+        db=Database(tmp_path/"audit.db"); shadow(db)
+>       assert evaluate_due_shadows(db,tick,NOW+900) == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = evaluate_due_shadows(<storage.database.Database object at 0x7f022b0af110>, MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000901, source='MOCK', min_order_usdt=Decimal('10')), (1800000000 + 900))
+
+tests/test_jury_audit.py:65: AssertionError
+______________ test_invalid_market_cannot_complete_shadow[tick2] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_com2')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('101'), ask=Decimal('100'), captured_at=1800000900, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW+900-11), market(at=NOW+901), market(at=NOW+900,bid="101"), market(at=NOW+900,bid="0")])
+    def test_invalid_market_cannot_complete_shadow(tmp_path, tick):
+        db=Database(tmp_path/"audit.db"); shadow(db)
+>       assert evaluate_due_shadows(db,tick,NOW+900) == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = evaluate_due_shadows(<storage.database.Database object at 0x7f022afcf750>, MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('101'), ask=Decimal('100'), captured_at=1800000900, source='MOCK', min_order_usdt=Decimal('10')), (1800000000 + 900))
+
+tests/test_jury_audit.py:65: AssertionError
+______________ test_invalid_market_cannot_complete_shadow[tick3] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_com3')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('0'), ask=Decimal('100'), captured_at=1800000900, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW+900-11), market(at=NOW+901), market(at=NOW+900,bid="101"), market(at=NOW+900,bid="0")])
+    def test_invalid_market_cannot_complete_shadow(tmp_path, tick):
+        db=Database(tmp_path/"audit.db"); shadow(db)
+>       assert evaluate_due_shadows(db,tick,NOW+900) == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = evaluate_due_shadows(<storage.database.Database object at 0x7f022ad8ce90>, MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('0'), ask=Decimal('100'), captured_at=1800000900, source='MOCK', min_order_usdt=Decimal('10')), (1800000000 + 900))
+
+tests/test_jury_audit.py:65: AssertionError
+_____________________ test_mock_cannot_complete_atk_shadow _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_mock_cannot_complete_atk_0')
+
+    def test_mock_cannot_complete_atk_shadow(tmp_path):
+        db=Database(tmp_path/"audit.db"); shadow(db,source="ATK_LIVE_MARKET")
+>       assert evaluate_due_shadows(db,market(at=NOW+900),NOW+900) == 0
+E       AssertionError: assert 1 == 0
+E        +  where 1 = evaluate_due_shadows(<storage.database.Database object at 0x7f022ad8e9e0>, MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000900, source='MOCK', min_order_usdt=Decimal('10')), (1800000000 + 900))
+E        +    where MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('99.9'), ask=Decimal('100'), captured_at=1800000900, source='MOCK', min_order_usdt=Decimal('10')) = market(at=(1800000000 + 900))
+
+tests/test_jury_audit.py:70: AssertionError
+_______________ test_invalid_market_cannot_close_position[tick0] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_clo0')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('95'), ask=Decimal('100'), captured_at=1799999989, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW-11,bid="95"), market(at=NOW+1,bid="95"), market(bid="-1"), market(bid="NaN")])
+    def test_invalid_market_cannot_close_position(tmp_path, tick):
+        db=Database(tmp_path/"audit.db")
+        open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW-20)
+>       assert monitor_open_positions(db,tick,NOW,utc_day(NOW)) == []
+E       assert [1] == []
+E         
+E         Left contains one more item: 1
+E         Use -v to get more diff
+
+tests/test_jury_audit.py:77: AssertionError
+_______________ test_invalid_market_cannot_close_position[tick1] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_clo1')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('95'), ask=Decimal('100'), captured_at=1800000001, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW-11,bid="95"), market(at=NOW+1,bid="95"), market(bid="-1"), market(bid="NaN")])
+    def test_invalid_market_cannot_close_position(tmp_path, tick):
+        db=Database(tmp_path/"audit.db")
+        open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW-20)
+>       assert monitor_open_positions(db,tick,NOW,utc_day(NOW)) == []
+E       assert [1] == []
+E         
+E         Left contains one more item: 1
+E         Use -v to get more diff
+
+tests/test_jury_audit.py:77: AssertionError
+_______________ test_invalid_market_cannot_close_position[tick2] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_clo2')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('-1'), ask=Decimal('100'), captured_at=1800000000, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW-11,bid="95"), market(at=NOW+1,bid="95"), market(bid="-1"), market(bid="NaN")])
+    def test_invalid_market_cannot_close_position(tmp_path, tick):
+        db=Database(tmp_path/"audit.db")
+        open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW-20)
+>       assert monitor_open_positions(db,tick,NOW,utc_day(NOW)) == []
+E       assert [1] == []
+E         
+E         Left contains one more item: 1
+E         Use -v to get more diff
+
+tests/test_jury_audit.py:77: AssertionError
+_______________ test_invalid_market_cannot_close_position[tick3] _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_invalid_market_cannot_clo3')
+tick = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('NaN'), ask=Decimal('100'), captured_at=1800000000, source='MOCK', min_order_usdt=Decimal('10'))
+
+    @pytest.mark.parametrize("tick", [market(at=NOW-11,bid="95"), market(at=NOW+1,bid="95"), market(bid="-1"), market(bid="NaN")])
+    def test_invalid_market_cannot_close_position(tmp_path, tick):
+        db=Database(tmp_path/"audit.db")
+        open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW-20)
+>       assert monitor_open_positions(db,tick,NOW,utc_day(NOW)) == []
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_jury_audit.py:77: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+db = <storage.database.Database object at 0x7f022ad6ba50>
+market = MarketSnapshot(symbol='AVAX-USDT', bid=Decimal('NaN'), ask=Decimal('100'), captured_at=1800000000, source='MOCK', min_order_usdt=Decimal('10'))
+now = 1800000000, utc_day = '2027-01-15'
+
+    def monitor_open_positions(db: Database, market: MarketSnapshot, now: int, utc_day: str) -> list[int]:
+        closed: list[int] = []
+        with db.session() as conn:
+            rows = conn.execute(
+                "SELECT * FROM positions WHERE status = 'OPEN' AND symbol = ?",
+                (market.symbol,),
+            ).fetchall()
+            for row in rows:
+                stop = Decimal(str(row["stop_loss_price"]))
+>               if market.bid > stop:
+                   ^^^^^^^^^^^^^^^^^
+E               decimal.InvalidOperation: [<class 'decimal.InvalidOperation'>]
+
+core/position_monitor.py:18: InvalidOperation
+_____________________ test_mock_cannot_close_atk_position ______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_mock_cannot_close_atk_pos0')
+
+    def test_mock_cannot_close_atk_position(tmp_path):
+        db=Database(tmp_path/"audit.db")
+        open_paper_position(db,market=market(source="ATK_LIVE_MARKET"),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW)
+>       assert monitor_open_positions(db,market(bid="95"),NOW,utc_day(NOW)) == []
+E       assert [1] == []
+E         
+E         Left contains one more item: 1
+E         Use -v to get more diff
+
+tests/test_jury_audit.py:84: AssertionError
+________________ test_stop_loss_counts_both_fees_and_utc_reset _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_stop_loss_counts_both_fee0')
+
+    def test_stop_loss_counts_both_fees_and_utc_reset(tmp_path):
+        db=Database(tmp_path/"audit.db")
+        pos=open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW)
+        assert monitor_open_positions(db,market(bid="95"),NOW,utc_day(NOW)) == [pos.id]
+        # quantity .25; sell 23.75; sell fee .02375; buy fee .025.
+>       assert db.get_daily_loss(utc_day(NOW)) == D("1.29875")
+E       AssertionError: assert Decimal('1.27375') == Decimal('1.29875')
+E        +  where Decimal('1.27375') = get_daily_loss('2027-01-15')
+E        +    where get_daily_loss = <storage.database.Database object at 0x7f022ad26990>.get_daily_loss
+E        +    and   '2027-01-15' = utc_day(1800000000)
+E        +  and   Decimal('1.29875') = D('1.29875')
+
+tests/test_jury_audit.py:92: AssertionError
+_________ test_exact_shadow_pnl_and_limited_stop_note[15-99--0.29975] __________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_exact_shadow_pnl_and_limi0')
+horizon = 15, bid = '99', expected = '-0.29975'
+
+    @pytest.mark.parametrize("horizon,bid,expected", [(15,"99","-0.29975"),(60,"101","0.19975")])
+    def test_exact_shadow_pnl_and_limited_stop_note(tmp_path,horizon,bid,expected):
+        db=Database(tmp_path/"audit.db"); sid=shadow(db)
+        at=NOW+horizon*60
+        evaluate_due_shadows(db,market(at=at,bid=bid,ask=str(D(bid)+1)),at)
+        with db.session() as conn:
+            row=conn.execute("SELECT * FROM shadow_evaluations WHERE shadow_id=? AND horizon_minutes=?",(sid,horizon)).fetchone()
+        assert D(row["pnl_usdt"]) == D(expected)
+>       assert "stop_dogrulamasi_sinirli" in row["note"]
+E       AssertionError: assert 'stop_dogrulamasi_sinirli' in ''
+
+tests/test_jury_audit.py:106: AssertionError
+_________ test_exact_shadow_pnl_and_limited_stop_note[60-101-0.19975] __________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_exact_shadow_pnl_and_limi1')
+horizon = 60, bid = '101', expected = '0.19975'
+
+    @pytest.mark.parametrize("horizon,bid,expected", [(15,"99","-0.29975"),(60,"101","0.19975")])
+    def test_exact_shadow_pnl_and_limited_stop_note(tmp_path,horizon,bid,expected):
+        db=Database(tmp_path/"audit.db"); sid=shadow(db)
+        at=NOW+horizon*60
+        evaluate_due_shadows(db,market(at=at,bid=bid,ask=str(D(bid)+1)),at)
+        with db.session() as conn:
+            row=conn.execute("SELECT * FROM shadow_evaluations WHERE shadow_id=? AND horizon_minutes=?",(sid,horizon)).fetchone()
+        assert D(row["pnl_usdt"]) == D(expected)
+>       assert "stop_dogrulamasi_sinirli" in row["note"]
+E       AssertionError: assert 'stop_dogrulamasi_sinirli' in ''
+
+tests/test_jury_audit.py:106: AssertionError
+________________ test_live_counter_requires_both_entry_and_exit ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-hazar/pytest-5/test_live_counter_requires_bot0')
+
+    def test_live_counter_requires_both_entry_and_exit(tmp_path):
+        db=Database(tmp_path/"audit.db")
+        for source,feed in [("MOCK","ATK_LIVE_MARKET"),("ATK_LIVE_MARKET","MOCK"),("ATK_LIVE_MARKET","ATK_LIVE_MARKET")]:
+            sid=shadow(db,source=source)
+            with db.session() as conn:
+                conn.execute("UPDATE shadow_evaluations SET status='COMPLETE',feed_source=?,pnl_usdt='-1',evaluated_at=? WHERE shadow_id=?",(feed,NOW+3600,sid))
+        report=build_report(db.path)
+>       assert report["complete_15m_live_feed"] == report["complete_60m_live_feed"] == 1
+E       assert 2 == 1
+
+tests/test_jury_audit.py:117: AssertionError
+________________ test_daily_loss_never_loosens_fixed_five_usdt _________________
+
+    def test_daily_loss_never_loosens_fixed_five_usdt():
+        decision=evaluate(constitution=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","BUY","audit"),
+            market=market(),available_usdt=D("200"),min_order_usdt=D("10"),daily_realized_loss_usdt=D("5"),
+            day_start_balance_usdt=D("200"),now=NOW)
+>       assert decision.rule == "DAILY_LOSS"
+E       AssertionError: assert 'OK' == 'DAILY_LOSS'
+E         
+E         - DAILY_LOSS
+E         + OK
+
+tests/test_jury_audit.py:127: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_jury_audit.py::test_unexecutable_is_technical_before_risk_or_pass[30-99.9-BUY]
+FAILED tests/test_jury_audit.py::test_unexecutable_is_technical_before_risk_or_pass[30-99.9-PASS]
+FAILED tests/test_jury_audit.py::test_unexecutable_is_technical_before_risk_or_pass[30-90-BUY]
+FAILED tests/test_jury_audit.py::test_unexecutable_is_technical_before_risk_or_pass[30-90-PASS]
+FAILED tests/test_jury_audit.py::test_unexecutable_is_technical_before_risk_or_pass[50-90-BUY]
+FAILED tests/test_jury_audit.py::test_unexecutable_is_technical_before_risk_or_pass[50-90-PASS]
+FAILED tests/test_jury_audit.py::test_atk_preserves_exchange_timestamp[11] - ...
+FAILED tests/test_jury_audit.py::test_atk_missing_timestamp_is_not_fresh - Fa...
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_complete_shadow[tick0]
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_complete_shadow[tick1]
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_complete_shadow[tick2]
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_complete_shadow[tick3]
+FAILED tests/test_jury_audit.py::test_mock_cannot_complete_atk_shadow - Asser...
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_close_position[tick0]
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_close_position[tick1]
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_close_position[tick2]
+FAILED tests/test_jury_audit.py::test_invalid_market_cannot_close_position[tick3]
+FAILED tests/test_jury_audit.py::test_mock_cannot_close_atk_position - assert...
+FAILED tests/test_jury_audit.py::test_stop_loss_counts_both_fees_and_utc_reset
+FAILED tests/test_jury_audit.py::test_exact_shadow_pnl_and_limited_stop_note[15-99--0.29975]
+FAILED tests/test_jury_audit.py::test_exact_shadow_pnl_and_limited_stop_note[60-101-0.19975]
+FAILED tests/test_jury_audit.py::test_live_counter_requires_both_entry_and_exit
+FAILED tests/test_jury_audit.py::test_daily_loss_never_loosens_fixed_five_usdt
+23 failed, 1 passed in 0.12s

@@ -24,6 +24,27 @@ function esc(s) {
     .replace(/"/g, "&quot;");
 }
 
+// Display-only rounding uses integer arithmetic; stored Decimal values stay intact.
+function fmtUsdt(value, places = 6) {
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(String(value ?? ""));
+  if (!match) return "—";
+  const exponent = Number(match[4] || 0);
+  if (Math.abs(exponent) > 1000) return "—";
+  const digits = match[2] + (match[3] || "");
+  const point = match[2].length + exponent;
+  const integer = point <= 0 ? "0" : digits.slice(0, point).padEnd(point, "0");
+  const fraction = point < 0 ? "0".repeat(-point) + digits : digits.slice(Math.max(0, point));
+  const padded = fraction.padEnd(places + 1, "0");
+  let scaled = BigInt(integer + padded.slice(0, places));
+  if (padded[places] >= "5") scaled += 1n;
+  const nonzero = /[1-9]/.test(digits);
+  const sign = match[1] === "-" && nonzero ? "−" : "";
+  if (scaled === 0n && nonzero) return `${sign}<0,${"0".repeat(places - 1)}1`;
+  const result = scaled.toString().padStart(places + 1, "0");
+  const whole = result.slice(0, -places).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+  return `${sign}${whole},${result.slice(-places)}`;
+}
+
 function fmtTs(epoch) {
   if (!epoch) return "—";
   try {
@@ -46,7 +67,7 @@ function renderMetrics(snap) {
     ["60 dk · canlı veri gözlemi", r.complete_60m_live_feed ?? "—"],
     ["Risk nedeniyle engellenen", r.decisions_shadow_risk ?? 0],
     ["Teknik blok", r.decisions_technical_block ?? 0],
-    ["PAPER bakiye", `${snap.paper_balance_usdt ?? "—"} USDT`],
+    ["PAPER bakiye", `${fmtUsdt(snap.paper_balance_usdt, 2)} USDT`],
   ];
   document.getElementById("metric-strip").innerHTML = items
     .map(
@@ -76,6 +97,7 @@ function renderSystem(snap) {
   document.getElementById("system-body").innerHTML = kvHtml([
     ["Son piyasa kaynağı", snap.last_market_source || "—"],
     ["Son karar yaşı", age],
+    ["Sinyal kökenleri", Object.entries(snap.report?.decisions_by_signal_origin || {}).map(([k,v]) => `${k}: ${v}`).join(" · ") || "—"],
     ["Bekleyen değerlendirme", snap.report?.pending_evaluations ?? "—"],
     ["Açık PAPER pozisyon", (snap.open_positions || []).length],
   ]);
@@ -92,7 +114,7 @@ function renderConstitution(snap) {
     ["Max toplam risk", `%${c.max_toplam_risk_pct}`],
     ["Makas tavanı", `%${c.max_spread_pct}`],
     ["Stop", `%${c.stop_loss_pct}`],
-    ["Günlük zarar", `%${c.gunluk_zarar_pct}`],
+    ["Günlük zarar", `En fazla ${c.gunluk_zarar_usdt} USDT ve gün başı %${c.gunluk_zarar_pct}`],
     ["Bekleme", `${c.bekleme_dk} dk / parite`],
     ["Gözlem eşiği", `${c.gozlem_esigi_usdt} USDT`],
     ["Açık pozisyonlar", pos || "—"],
@@ -102,7 +124,8 @@ function renderConstitution(snap) {
 const STATUS_LABELS = {
   APPROVED_PAPER: "PAPER onayı", SHADOW_RISK: "Risk engeli",
   SHADOW_PASS: "Pas gözlemi", TECHNICAL_BLOCK: "Teknik engel",
-  NO_DECISION: "Karar yok", COMPLETE: "Tamamlandı", PENDING: "Bekliyor",
+  NO_DECISION: "Karar yok", CONSTITUTIONAL_RISK_BLOCK: "Anayasal risk",
+  PASS_OBSERVATION: "Pas gözlemi", TECHNICAL_UNEXECUTABLE: "Teknik kayıt", COMPLETE: "Tamamlandı", PENDING: "Bekliyor",
 };
 
 function statusHtml(status) {
@@ -121,7 +144,7 @@ function tableHtml(caption, headers, rows, empty) {
 
 function renderShadow(snap) {
   const eb = snap.eval_breakdown || {};
-  const summary = `<div class="observation-summary">${[15, 60].map((minutes) =>
+  const summary = `<p class="hint">Tüm kategoriler dahildir. Teknik kayıtlar risk koruması sayılmaz.</p><div class="observation-summary">${[15, 60].map((minutes) =>
     `<span><strong>${minutes} dk</strong> ${esc(eb[minutes]?.COMPLETE ?? 0)} tamamlandı <span class="summary-divider">/</span> ${esc(eb[minutes]?.PENDING ?? 0)} bekliyor</span>`
   ).join("")}</div>`;
   const rows = (snap.recent_shadow || []).map((row) => `<tr>
@@ -130,11 +153,12 @@ function renderShadow(snap) {
     <td class="nowrap">${esc(row.horizon_minutes)} dk</td>
     <td>${statusHtml(row.status)}</td>
     <td>${statusHtml(row.category)}</td>
-    <td class="numeric">${row.pnl_usdt != null ? `${esc(row.pnl_usdt)}<small>USDT · karşı-olgusal</small>` : "—"}</td>
-    <td class="cell-source">${esc(row.feed_source || "Veri bekleniyor")}</td>
+    <td class="numeric">${row.pnl_usdt != null ? `<span title="Ham değer: ${esc(row.pnl_usdt)}">${esc(fmtUsdt(row.pnl_usdt))}</span><small>USDT · karşı-olgusal</small>` : "—"}</td>
+    <td class="cell-source">Giriş: ${esc(row.entry_source || "—")}<small>Çıkış: ${esc(row.feed_source || "Bekleniyor")}<br>Sinyal: ${esc(row.signal_origin || "UNKNOWN")}</small></td>
+    <td class="cell-time">Hedef: ${esc(fmtTs(row.target_at))}<small>Ölçüm: ${esc(fmtTs(row.evaluated_at))}<br>${esc(row.note || (row.status === "COMPLETE" ? "Eski kayıt: stop doğrulaması belgelenmedi" : "Ölçüm bekleniyor"))}</small></td>
   </tr>`).join("");
   document.getElementById("shadow-body").innerHTML = summary + tableHtml(
-    "Gölge gözlem kayıtları", ["Kayıt", "Parite", "Pencere", "Gözlem durumu", "Karar sınıfı", "Net sonuç", "Veri kaynağı"],
+    "Gölge gözlem kayıtları", ["Kayıt", "Parite", "Pencere", "Gözlem durumu", "Karar sınıfı", "Net sonuç", "Veri / sinyal kökeni", "Ölçüm / sınırlamalar"],
     rows, "Henüz gölge kaydı yok. Engellenen veya pas geçilen adaylar burada izlenir."
   );
 }
@@ -166,10 +190,11 @@ function renderChain(snap) {
       '<p class="hint">Henüz zincir kanıtı üretilmedi. Bir kayıt sabitlendiğinde hash ve doğrulama bilgisi burada görünecek.</p>';
     return;
   }
-  const tx = a.snowtrace_tx ? "Fuji işlem kaydı mevcut" : "Yerel hash · Fuji işlemi bekleniyor";
+  const tx = "Doğrulanmış blockchain kanıtı yok";
   document.getElementById("chain-body").innerHTML = kvHtml([
-    ["sha256", (a.sha256 || "").slice(0, 16) + "…"],
-    ["Karar sayısı", a.decision_count],
+    ["Yerel SHA-256", a.sha256 || "—"],
+    ["Manifest kayıt sayısı", a.decision_count],
+    ["Hash kapsamı", `Son en fazla ${a.batch_limit ?? "—"} karar · eski manifestlerde kayıt sayısı farklı olabilir`],
     ["Üretim", a.generated_at],
     ["Zincir", tx],
   ]);
@@ -181,7 +206,7 @@ function renderChain(snap) {
         link.href = url.href;
         link.target = "_blank";
         link.rel = "noopener noreferrer";
-        link.textContent = "İşlemi Snowtrace üzerinde doğrula ↗";
+        link.textContent = "Bildirilen işlem bağlantısı (doğrulanmadı) ↗";
         document.getElementById("chain-body").append(link);
       }
     } catch { /* A malformed proof URL must not interrupt the dashboard. */ }

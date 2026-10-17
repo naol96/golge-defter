@@ -40,8 +40,9 @@ if st.sidebar.button("Döngüyü çalıştır"):
         st.stop()
     signal = demo_signal(market)
     now = int(time.time())
-    decision, ref_id = run_decision_cycle(db, rules=rules, signal=signal, market=market, now=now)
+    db.get_day_start_balance(utc_day(now))
     monitor_open_positions(db, market, now, utc_day(now))
+    decision, ref_id = run_decision_cycle(db, rules=rules, signal=signal, market=market, now=now)
     evaluate_due_shadows(db, market, now)
     st.session_state["last"] = (market, signal, decision, ref_id, now)
 

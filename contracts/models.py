@@ -50,6 +50,20 @@ class MarketSnapshot:
     source: DataSource = "MOCK"
     min_order_usdt: Decimal = D("10")
 
+    def is_usable(self, now: int, max_age_seconds: int = 10) -> bool:
+        """All state-changing consumers reject stale, future and invalid prices."""
+        return (
+            isinstance(now, int) and isinstance(self.captured_at, int)
+            and 0 <= now - self.captured_at <= max_age_seconds
+            and self.bid.is_finite() and self.ask.is_finite()
+            and 0 < self.bid <= self.ask
+        )
+
+
+def compatible_sources(source: str) -> tuple[str, ...]:
+    # Historical ATK alias is the same live feed family. Never mix MOCK/FIXTURE.
+    return ("ATK", "ATK_LIVE_MARKET") if source in ("ATK", "ATK_LIVE_MARKET") else (source,)
+
 
 @dataclass(frozen=True)
 class AnalystSignal:

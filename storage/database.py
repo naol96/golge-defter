@@ -119,6 +119,21 @@ class Database:
             )
             self._ensure_column(conn, "shadow_evaluations", "feed_source", "TEXT DEFAULT ''")
             self._ensure_column(conn, "decisions", "rules_version", "TEXT DEFAULT ''")
+            self._ensure_column(conn, "positions", "market_source", "TEXT NOT NULL DEFAULT ''")
+            # Recover provenance for old positions only from an unambiguous decision.
+            conn.execute("""
+                UPDATE positions SET market_source = (
+                    SELECT MIN(d.market_source) FROM decisions d
+                    WHERE d.status='APPROVED_PAPER' AND d.ref_id=positions.id
+                      AND d.symbol=positions.symbol
+                    HAVING COUNT(DISTINCT d.market_source)=1
+                )
+                WHERE market_source='' AND EXISTS (
+                    SELECT 1 FROM decisions d WHERE d.status='APPROVED_PAPER'
+                      AND d.ref_id=positions.id AND d.symbol=positions.symbol
+                    GROUP BY d.ref_id HAVING COUNT(DISTINCT d.market_source)=1
+                )
+            """)
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
         cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}

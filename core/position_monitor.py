@@ -1,17 +1,21 @@
 from decimal import Decimal
 
-from contracts.models import MarketSnapshot
+from contracts.models import MarketSnapshot, compatible_sources
 from storage.database import Database
 
 FEE_RATE = Decimal("0.001")
 
 
 def monitor_open_positions(db: Database, market: MarketSnapshot, now: int, utc_day: str) -> list[int]:
+    if not market.is_usable(now):
+        return []
+    sources = compatible_sources(market.source)
+    placeholders = ",".join("?" for _ in sources)
     closed: list[int] = []
     with db.session() as conn:
         rows = conn.execute(
-            "SELECT * FROM positions WHERE status = 'OPEN' AND symbol = ?",
-            (market.symbol,),
+            f"SELECT * FROM positions WHERE status = 'OPEN' AND symbol = ? AND market_source IN ({placeholders})",
+            (market.symbol, *sources),
         ).fetchall()
         for row in rows:
             stop = Decimal(str(row["stop_loss_price"]))
@@ -23,15 +27,15 @@ def monitor_open_positions(db: Database, market: MarketSnapshot, now: int, utc_d
             exit_price = market.bid
             proceeds = qty * exit_price
             fee = proceeds * FEE_RATE
-            pnl = proceeds - fee - notional
-            conn.execute(
+            pnl = proceeds - fee - notional - notional * FEE_RATE
+            cur = conn.execute(
                 """
                 UPDATE positions SET status='CLOSED', closed_at=?, close_reason='STOP_LOSS'
                 WHERE id=? AND status='OPEN'
                 """,
                 (now, row["id"]),
             )
-            if conn.total_changes == 0:
+            if cur.rowcount == 0:
                 continue
             bal_row = conn.execute("SELECT balance_usdt FROM paper_state WHERE id=1").fetchone()
             balance = Decimal(str(bal_row["balance_usdt"])) + proceeds - fee

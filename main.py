@@ -33,10 +33,11 @@ def main() -> None:
     user_msg = ""
     if args.user_rule.strip():
         rules, _, user_msg = apply_user_request(rules, args.user_rule)
+    db.get_day_start_balance(utc_day(now))
+    monitor_open_positions(db, market, now, utc_day(now))
     decision, ref_id = run_decision_cycle(
         db, rules=rules, signal=signal, market=market, now=now
     )
-    monitor_open_positions(db, market, now, utc_day(now))
     evaluate_due_shadows(db, market, now)
     print(
         {

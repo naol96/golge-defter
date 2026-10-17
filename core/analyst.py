@@ -8,6 +8,8 @@ from contracts.models import AnalystSignal, MarketSnapshot
 
 
 def validate_analyst_payload(payload: dict[str, Any]) -> AnalystSignal:
+    if not isinstance(payload, dict) or set(payload) != {"symbol", "action", "reason"}:
+        raise ValueError("only symbol, action and reason are permitted")
     symbol = str(payload.get("symbol", "")).strip()
     action = str(payload.get("action", "")).strip().upper()
     reason = str(payload.get("reason", "")).strip()
@@ -55,8 +57,10 @@ def llm_signal(market: MarketSnapshot) -> AnalystSignal:
             origin="LLM",
         )
     prompt = (
-        "Yalnızca JSON döndür: "
-        '{"symbol":"' + market.symbol + '","action":"BUY veya PASS","reason":"tek cümle"}'
+        "Piyasa: " + json.dumps({"symbol": market.symbol, "bid": str(market.bid),
+            "ask": str(market.ask), "captured_at": market.captured_at, "source": market.source})
+        + '\nYalnızca JSON döndür: {"symbol":"' + market.symbol
+        + '","action":"BUY veya PASS","reason":"tek cümle"}'
     )
     api_url = os.environ.get(
         "GOLGE_LLM_API_URL",
@@ -90,8 +94,11 @@ def llm_signal(market: MarketSnapshot) -> AnalystSignal:
         text = payload["choices"][0]["message"]["content"].strip()
         if text.startswith("```"):
             text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        return parse_analyst_json(text)
-    except (urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError):
+        signal = parse_analyst_json(text)
+        if signal.symbol != market.symbol:
+            raise ValueError("analyst symbol differs from market")
+        return signal
+    except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, AttributeError, ValueError, json.JSONDecodeError):
         return AnalystSignal(
             symbol=market.symbol,
             action="PASS",

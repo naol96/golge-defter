@@ -1,19 +1,20 @@
 # Teslim Kartı (Gölge Defter)
 
-Son güncelleme: 2026-10-17 ~14:35 TRT · Worker **rules_v2 restart yapıldı** · DB: `data/golge.db`
+Son güncelleme: 2026-10-17 ~15:10 TRT · Worker **rules_v2** aktif · DB: `data/golge.db` (salt okunur kokpit)
 
 | Alan | Değer |
 | --- | --- |
-| Repo | https://github.com/hazarkasap/golge-defter (private; jüriye invite) |
-| Canlı kokpit | `bash scripts/start_kokpit.sh` → http://127.0.0.1:8501 (yedek: `streamlit run dashboard/kokpit_proof.py`) |
-| Yedek video | _(17:30–18:00 çekim — link buraya)_ |
+| Repo | https://github.com/hazarkasap/golge-defter (private) · yerelde **push bekliyor** |
+| Canlı kokpit | `bash scripts/start_kokpit.sh` → http://127.0.0.1:8501 (koyu web UI; yedek Streamlit) |
+| Yedek video | _(siz çekin — 75–90 sn; link buraya)_ |
 | ATK modu | Salt okunur MCP (`npx @okx_ai/okx-trade-mcp --modules market --read-only`) |
-| ATK kanıtı (Bonus 1) | Read-only MCP + canlı `ATK_LIVE_MARKET` kararları; spot emir: _(15:30 veya "TR demo yok")_ |
-| Fuji sözleşme | Yerel manifest hazır; on-chain: `FUJI_ANCHOR_CONTRACT` + cüzdan gerekli |
-| Snowtrace tx (≥2) | _(henüz yok — `evidence/anchor_manifest.json` sha256 kanıtı var)_ |
-| Gölge Defter özet | **208+** ATK karar · **1** PAPER · **128×** 15dk · **19×** 60dk COMPLETE · **canlı SHADOW_RISK** (Kural 2 `EXPOSURE`, `rules_v2`) + Hamle A SPREAD ayrı DB |
-| Analist | DEMO (canlı worker) |
-| Kural sürümü | Canlı worker **`rules_v2`** (`decisions.rules_version`); restart: `bash scripts/restart_atk_worker.sh` |
+| ATK kanıtı (Bonus 1) | **307** karar `ATK_LIVE_MARKET`; spot emir: _(yoksa "TR demo yok" + SS)_ |
+| Fuji | `evidence/anchor_manifest.json` — `LOCAL_SHA256`, **blockchain_verified=false** |
+| Snowtrace tx (≥2) | **Eksik** (`FUJI_ANCHOR_CONTRACT` + test AVAX) |
+| Gölge Defter özet | **307** karar · **1** PAPER · **199×** 15dk · **113×** 60dk · **72** SHADOW_RISK · **159** TECHNICAL_BLOCK |
+| Analist (canlı) | **DEMO** (tüm canlı `signal_origin`) |
+| Analist (LLM) | Mock: `evidence/llm_single_cycle.txt` (OpenRouter `.env`) |
+| Kural sürümü | **`rules_v2`** · LLM worker: `GOLGE_ANALYST=llm bash scripts/restart_atk_worker.sh` |
 
 ## Kanıt komutları
 

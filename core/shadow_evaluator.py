@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from contracts.models import MarketSnapshot
+from contracts.models import MarketSnapshot, compatible_sources
 from storage.database import Database
 
 DEFAULT_FEE_RATE = Decimal("0.001")
@@ -15,18 +15,23 @@ def shadow_pnl(entry_ask: Decimal, exit_bid: Decimal, notional: Decimal) -> Deci
 
 
 def evaluate_due_shadows(db: Database, market: MarketSnapshot, now: int) -> int:
+    if not market.is_usable(now):
+        return 0
+    sources = compatible_sources(market.source)
+    placeholders = ",".join("?" for _ in sources)
     updated = 0
     with db.session() as conn:
         rows = conn.execute(
-            """
+            f"""
             SELECT st.id, st.entry_ask, st.notional_usdt, st.created_at,
                    st.target_15_at, st.target_60_at,
                    se.horizon_minutes, se.status
             FROM shadow_trades st
             JOIN shadow_evaluations se ON se.shadow_id = st.id
             WHERE st.symbol = ? AND se.status = 'PENDING'
+              AND st.source IN ({placeholders})
             """,
-            (market.symbol,),
+            (market.symbol, *sources),
         ).fetchall()
         for row in rows:
             horizon = int(row["horizon_minutes"])
@@ -36,7 +41,9 @@ def evaluate_due_shadows(db: Database, market: MarketSnapshot, now: int) -> int:
             entry = Decimal(str(row["entry_ask"]))
             notional = Decimal(str(row["notional_usdt"]))
             pnl = shadow_pnl(entry, market.bid, notional)
-            note = "LATE_EVALUATION" if now > due_at + 120 else ""
+            note = "stop_dogrulamasi_sinirli"
+            if now > due_at + 120:
+                note += ";LATE_EVALUATION"
             cur = conn.execute(
                 """
                 UPDATE shadow_evaluations
