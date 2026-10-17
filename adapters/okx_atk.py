@@ -10,6 +10,7 @@ from queue import Empty, Queue
 
 from adapters.base import MarketAdapter
 from contracts.models import MarketSnapshot
+from core.min_order import min_notional_usdt
 
 
 class OkxAtkMarketAdapter(MarketAdapter):
@@ -115,6 +116,24 @@ class OkxAtkMarketAdapter(MarketAdapter):
             except subprocess.TimeoutExpired:
                 proc.kill()
 
+    def _instrument_min_order_usdt(self, symbol: str, ask: Decimal) -> Decimal:
+        try:
+            inst = self._call_tool(
+                "market_get_instruments", {"instType": "SPOT", "instId": symbol}
+            )
+            row = (inst.get("data") or {}).get("data") or []
+            if not row:
+                return self.min_order_usdt
+            spec = row[0]
+            min_sz = Decimal(str(spec.get("minSz") or "0"))
+            lot_sz_raw = spec.get("lotSz")
+            lot_sz = Decimal(str(lot_sz_raw)) if lot_sz_raw else None
+            if min_sz <= 0:
+                return self.min_order_usdt
+            return min_notional_usdt(ask, min_sz, lot_sz_base=lot_sz)
+        except Exception:
+            return self.min_order_usdt
+
     def fetch_snapshot(self, symbol: str) -> MarketSnapshot:
         data = self._call_tool("market_get_ticker", {"instId": symbol})
         row = (data.get("data") or {}).get("data") or []
@@ -130,11 +149,13 @@ class OkxAtkMarketAdapter(MarketAdapter):
         else:
             tick_at = fetched_at
         captured_at = tick_at if abs(fetched_at - tick_at) <= 10 else fetched_at
+        ask = Decimal(str(tick["askPx"]))
+        min_order = self._instrument_min_order_usdt(symbol, ask)
         return MarketSnapshot(
             symbol=symbol,
             bid=Decimal(str(tick["bidPx"])),
-            ask=Decimal(str(tick["askPx"])),
+            ask=ask,
             captured_at=captured_at,
             source="ATK_LIVE_MARKET",
-            min_order_usdt=self.min_order_usdt,
+            min_order_usdt=min_order,
         )

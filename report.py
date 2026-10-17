@@ -57,9 +57,19 @@ def build_report(db_path: Path) -> dict:
         complete_15 = conn.execute(
             "SELECT COUNT(*) FROM shadow_evaluations WHERE horizon_minutes=15 AND status='COMPLETE'"
         ).fetchone()[0]
+        live_15 = conn.execute(
+            """
+            SELECT COUNT(*) FROM shadow_evaluations se
+            JOIN shadow_trades st ON st.id = se.shadow_id
+            WHERE se.horizon_minutes=15 AND se.status='COMPLETE'
+              AND se.feed_source IN ('ATK_LIVE_MARKET', 'ATK')
+            """
+        ).fetchone()[0]
         complete_60 = conn.execute(
             "SELECT COUNT(*) FROM shadow_evaluations WHERE horizon_minutes=60 AND status='COMPLETE'"
         ).fetchone()[0]
+        technical_blocks = int(decisions.get("TECHNICAL_BLOCK", 0))
+        risk_blocks = int(decisions.get("SHADOW_RISK", 0))
         live_60 = conn.execute(
             """
             SELECT COUNT(*) FROM shadow_evaluations se
@@ -89,8 +99,11 @@ def build_report(db_path: Path) -> dict:
         "evaluations_by_status": eval_status,
         "pending_evaluations": int(pending),
         "complete_15m": int(complete_15),
+        "complete_15m_live_feed": int(live_15),
         "complete_60m": int(complete_60),
         "complete_60m_live_feed": int(live_60),
+        "decisions_technical_block": technical_blocks,
+        "decisions_shadow_risk": risk_blocks,
         "last_decision": dict(last_decision) if last_decision else None,
         "paper_balance_usdt": str(paper_balance[0]) if paper_balance else None,
         "open_paper_positions": int(open_positions),
@@ -126,9 +139,12 @@ def format_markdown(report: dict) -> str:
             "## 15/60 değerlendirme",
             f"- Durum: {report['evaluations_by_status']}",
             f"- Bekleyen: {report['pending_evaluations']}",
-            f"- Tamamlanan 15 dk: {report['complete_15m']}",
-            f"- Tamamlanan 60 dk: {report['complete_60m']}",
-            f"- Tamamlanan 60 dk (ATK canlı): {report['complete_60m_live_feed']}",
+            f"- Tamamlanan 15 dk: {report['complete_15m']} (ATK canlı: {report['complete_15m_live_feed']})",
+            f"- Tamamlanan 60 dk: {report['complete_60m']} (ATK canlı: {report['complete_60m_live_feed']})",
+            "",
+            "## Engelleme sınıflandırması",
+            f"- TECHNICAL_BLOCK (min emir / icra): {report['decisions_technical_block']}",
+            f"- SHADOW_RISK (Anayasa): {report['decisions_shadow_risk']}",
             "",
             "## PAPER durumu",
             f"- Bakiye: {report.get('paper_balance_usdt')} USDT",

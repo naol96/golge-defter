@@ -20,6 +20,7 @@ def evaluate_due_shadows(db: Database, market: MarketSnapshot, now: int) -> int:
         rows = conn.execute(
             """
             SELECT st.id, st.entry_ask, st.notional_usdt, st.created_at,
+                   st.target_15_at, st.target_60_at,
                    se.horizon_minutes, se.status
             FROM shadow_trades st
             JOIN shadow_evaluations se ON se.shadow_id = st.id
@@ -29,7 +30,7 @@ def evaluate_due_shadows(db: Database, market: MarketSnapshot, now: int) -> int:
         ).fetchall()
         for row in rows:
             horizon = int(row["horizon_minutes"])
-            due_at = int(row["created_at"]) + horizon * 60
+            due_at = int(row["target_15_at"] if horizon == 15 else row["target_60_at"])
             if now < due_at:
                 continue
             entry = Decimal(str(row["entry_ask"]))
