@@ -20,6 +20,16 @@ if [[ -f "$PIDFILE" ]]; then
   fi
 fi
 
+# Legacy Streamlit often still holds 8501; new kokpit cannot bind until it is freed.
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k 8501/tcp >/dev/null 2>&1 || true
+else
+  while read -r pid; do
+    [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+  done < <(ss -tlnp 2>/dev/null | grep ':8501' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u)
+fi
+sleep 1
+
 nohup "$PY" -m dashboard.serve_kokpit --host 127.0.0.1 --port 8501 \
   >> logs/kokpit.log 2>&1 &
 echo $! > "$PIDFILE"
