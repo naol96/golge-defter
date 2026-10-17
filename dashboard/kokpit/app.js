@@ -85,55 +85,64 @@ function renderConstitution(snap) {
   ]);
 }
 
+const STATUS_LABELS = {
+  APPROVED_PAPER: "PAPER onayı", SHADOW_RISK: "Risk engeli",
+  SHADOW_PASS: "Pas gözlemi", TECHNICAL_BLOCK: "Teknik engel",
+  NO_DECISION: "Karar yok", COMPLETE: "Tamamlandı", PENDING: "Bekliyor",
+};
+
+function statusHtml(status) {
+  const tone = status === "APPROVED_PAPER" || status === "COMPLETE" ? "positive"
+    : status === "SHADOW_RISK" || status === "TECHNICAL_BLOCK" ? "blocked" : "neutral";
+  return `<span class="table-status ${tone}" title="${esc(status)}">${esc(STATUS_LABELS[status] || status || "—")}</span>`;
+}
+
+function tableHtml(caption, headers, rows, empty) {
+  return `<div class="table-scroll" role="region" aria-label="${esc(caption)}" tabindex="0">
+    <table class="data-table"><caption class="sr-only">${esc(caption)}</caption>
+      <thead><tr>${headers.map((h) => `<th scope="col">${esc(h)}</th>`).join("")}</tr></thead>
+      <tbody>${rows || `<tr><td colspan="${headers.length}" class="table-empty">${esc(empty)}</td></tr>`}</tbody>
+    </table></div>`;
+}
+
 function renderShadow(snap) {
   const eb = snap.eval_breakdown || {};
-  const summary = kvHtml([
-    ["15 dk COMPLETE", eb["15"]?.COMPLETE ?? 0],
-    ["15 dk PENDING", eb["15"]?.PENDING ?? 0],
-    ["60 dk COMPLETE", eb["60"]?.COMPLETE ?? 0],
-    ["60 dk PENDING", eb["60"]?.PENDING ?? 0],
-  ]);
-  const cards = (snap.recent_shadow || [])
-    .map((row) => {
-      const pnl = row.pnl_usdt != null ? `PnL ${row.pnl_usdt} USDT` : "";
-      const feed = row.feed_source ? `feed ${row.feed_source}` : "feed (bekliyor)";
-      return `<div class="card">
-        <div class="card-head">
-          <span class="sym">#${esc(row.shadow_id)} ${esc(row.symbol)}</span>
-          <span class="tag">${esc(row.horizon_minutes)} dk</span>
-          <span class="tag">${esc(row.status)}</span>
-          <span class="tag">${esc(row.category)}</span>
-        </div>
-        <div class="card-meta">${esc(feed)} ${esc(pnl)}</div>
-      </div>`;
-    })
-    .join("");
-  document.getElementById("shadow-body").innerHTML = summary + `<div class="cards shadow-records">${cards || "<p class=\"hint\">Kayıt yok</p>"}</div>`;
+  const summary = `<div class="observation-summary">${[15, 60].map((minutes) =>
+    `<span><strong>${minutes} dk</strong> ${esc(eb[minutes]?.COMPLETE ?? 0)} tamamlandı <span class="summary-divider">/</span> ${esc(eb[minutes]?.PENDING ?? 0)} bekliyor</span>`
+  ).join("")}</div>`;
+  const rows = (snap.recent_shadow || []).map((row) => `<tr>
+    <td class="cell-id">#${esc(row.shadow_id)}</td>
+    <th scope="row">${esc(row.symbol)}</th>
+    <td class="nowrap">${esc(row.horizon_minutes)} dk</td>
+    <td>${statusHtml(row.status)}</td>
+    <td>${statusHtml(row.category)}</td>
+    <td class="numeric">${row.pnl_usdt != null ? `${esc(row.pnl_usdt)}<small>USDT · karşı-olgusal</small>` : "—"}</td>
+    <td class="cell-source">${esc(row.feed_source || "Veri bekleniyor")}</td>
+  </tr>`).join("");
+  document.getElementById("shadow-body").innerHTML = summary + tableHtml(
+    "Gölge gözlem kayıtları", ["Kayıt", "Parite", "Pencere", "Gözlem durumu", "Karar sınıfı", "Net sonuç", "Veri kaynağı"],
+    rows, "Henüz gölge kaydı yok. Engellenen veya pas geçilen adaylar burada izlenir."
+  );
 }
 
 function renderDecisions(snap) {
   const summary = snap.decisions_summary || {};
   document.getElementById("decision-chips").innerHTML = Object.entries(summary)
-    .map(
-      ([status, count]) =>
-        `<span class="chip status-${esc(status)}">${esc(status)}: ${count}</span>`
-    )
+    .map(([status, count]) => `<span class="chip status-${esc(status)}">${esc(STATUS_LABELS[status] || status)}: ${esc(count)}</span>`)
     .join("");
-
-  document.getElementById("decisions-body").innerHTML = (snap.recent_decisions || [])
-    .map((d) => {
-      const expl = d.explanation ? d.explanation.slice(0, 120) : "";
-      return `<div class="card">
-        <div class="card-head">
-          <span class="sym">#${esc(d.id)} ${esc(d.symbol)}</span>
-          <span class="tag">${esc(d.status)}</span>
-          <span class="tag">${esc(d.rule || "—")}</span>
-          <span class="tag">${esc(d.signal_origin)}</span>
-        </div>
-        <div class="card-meta">${esc(d.market_source)} · ${fmtTs(d.created_at)} · ${esc(expl)}</div>
-      </div>`;
-    })
-    .join("") || '<p class="hint">Henüz karar kaydı yok. Kaynak bağlandığında kararlar burada görünecek.</p>';
+  const rows = (snap.recent_decisions || []).map((d) => `<tr>
+    <td class="cell-id">#${esc(d.id)}</td>
+    <th scope="row">${esc(d.symbol)}</th>
+    <td>${statusHtml(d.status)}</td>
+    <td class="cell-rule">${esc(d.rule || "—")}</td>
+    <td class="cell-explanation">${esc(d.explanation || "Gerekçe kaydedilmedi.")}</td>
+    <td class="cell-source">${esc(d.market_source || "—")}<small>${esc(d.signal_origin || "—")}</small></td>
+    <td class="cell-time">${esc(fmtTs(d.created_at))}</td>
+  </tr>`).join("");
+  document.getElementById("decisions-body").innerHTML = tableHtml(
+    "Analist kararları", ["Kayıt", "Parite", "Karar", "Kural", "Gerekçe", "Veri / sinyal kaynağı", "Zaman"],
+    rows, "Henüz karar kaydı yok. Kaynak bağlandığında kararlar burada görünecek."
+  );
 }
 
 function renderChain(snap) {
