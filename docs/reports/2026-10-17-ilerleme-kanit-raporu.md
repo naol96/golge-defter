@@ -117,6 +117,14 @@ fd6c12c Agent rolleri ve faz rapor rehberi eklendi.
 3. **Anayasa dokümanı vs kod:** 7 maddenin bir kısmı henüz motorde; sunumda "MVP tablosu" şart.
 4. **LLM:** Fail-closed kanıtı var; üretken model sinyali canlıda doğrulanmadı.
 
+## 14:33 sprint güncelleme (Faz 0–1)
+
+- **P0 60 dk:** 19× `COMPLETE` + `ATK_LIVE_MARKET`; gölge id 1–3 için 15+60 çifti doğrulandı.
+- **Kanıt:** `evidence/measurement_report.md`, `evidence/anchor_manifest.json` (sha256), `evidence/shadow_risk_proof.json` (ayrı DB SPREAD).
+- **Teslim:** `docs/TESLIM_KARTI.md` güncellendi; repo https://github.com/hazarkasap/golge-defter (private).
+- **Restart:** `scripts/restart_atk_worker.sh` (~15:00, yedek + `rules_v2` log).
+- **Bekleyen:** Fuji tx (env), LLM (`OPENAI_API_KEY` yok), video, public repo kararı.
+
 ## Sonraki adımlar (PLAN_1840 ile uyumlu)
 
 1. **~14:24 TRT:** `python report.py --db data/golge.db --out evidence/measurement_report.md` → `complete_60m_live_feed >= 1`

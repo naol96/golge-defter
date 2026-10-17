@@ -86,12 +86,15 @@ def main() -> None:
     signal.signal(signal.SIGINT, _handle_stop)
 
     db = Database(args.db)
+    rules_version = ConstitutionRules().rules_version
     logging.info(
-        "worker_start source=%s analyst=%s interval=%ss db=%s",
+        "worker_start source=%s analyst=%s rules=%s interval=%ss db=%s user_rule=%s",
         args.source,
         args.analyst,
+        rules_version,
         args.interval,
         args.db,
+        (args.user_rule[:80] + "…") if len(args.user_rule) > 80 else (args.user_rule or "-"),
     )
     while not _STOP:
         run_cycle(

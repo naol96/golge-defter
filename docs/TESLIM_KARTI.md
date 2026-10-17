@@ -1,19 +1,19 @@
 # Teslim Kartı (Gölge Defter)
 
-Son güncelleme: 2026-10-17 ~14:27 TRT · Worker **dokunulmadı** · DB: `data/golge.db`
+Son güncelleme: 2026-10-17 ~14:33 TRT · Worker **aktif (restart öncesi)** · DB: `data/golge.db`
 
 | Alan | Değer |
 | --- | --- |
-| Herkese açık repo | _(GitHub URL — `git push` sonrası doldurun)_ |
-| Canlı kokpit | Yerel: `streamlit run dashboard/kokpit_proof.py` → http://localhost:8501 |
-| Yedek video | _(17:30–18:00 çekim — Drive/YouTube liste dışı link)_ |
+| Repo | https://github.com/hazarkasap/golge-defter (private; jüriye invite) |
+| Canlı kokpit | `streamlit run dashboard/kokpit_proof.py` → http://localhost:8501 |
+| Yedek video | _(17:30–18:00 çekim — link buraya)_ |
 | ATK modu | Salt okunur MCP (`npx @okx_ai/okx-trade-mcp --modules market --read-only`) |
-| ATK kanıtı (Bonus 1) | _(Order ID + saat — 15:30 kontrollü alım veya "TR demo yok" notu)_ |
-| Fuji sözleşme | _(FUJI_ANCHOR_CONTRACT — Hat B)_ |
-| Snowtrace tx (≥2) | _(FUJI_LAST_TX — `chain/anchor_job.py` manifest: `evidence/anchor_manifest.json`)_ |
-| Gölge Defter özet | ~187 ATK karar · 1 PAPER · 15dk COMPLETE artıyor · **60dk COMPLETE başladı (≥6)** · SHADOW_RISK canlıda 0 (Hamle A: `scripts/prove_shadow_risk_atk.py` ayrı DB) |
-| Analist | DEMO (LLM restart sonrası) |
-| Kural sürümü (kod) | `rules_v2` · canlı worker eski MIN_ORDER süreci → **15:00 restart** planı |
+| ATK kanıtı (Bonus 1) | Read-only MCP + canlı `ATK_LIVE_MARKET` kararları; spot emir: _(15:30 veya "TR demo yok")_ |
+| Fuji sözleşme | Yerel manifest hazır; on-chain: `FUJI_ANCHOR_CONTRACT` + cüzdan gerekli |
+| Snowtrace tx (≥2) | _(henüz yok — `evidence/anchor_manifest.json` sha256 kanıtı var)_ |
+| Gölge Defter özet | **202** ATK karar · **1** PAPER · **128×** 15dk · **19×** 60dk COMPLETE (`ATK_LIVE_MARKET`) · gölge id **1–3** 15+60 çifti · SHADOW_RISK canlı **0** (MIN_ORDER); anayasa veto: `evidence/shadow_risk_atk.db` + `evidence/shadow_risk_proof.json` |
+| Analist | DEMO (canlı worker) |
+| Kural sürümü | Kod `rules_v2`; canlı süreç restart öncesi eski MIN_ORDER → **`bash scripts/restart_atk_worker.sh` ~15:00** |
 
 ## Kanıt komutları
 

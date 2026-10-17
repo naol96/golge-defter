@@ -1,0 +1,43 @@
+DB: /home/hazar/golge-defter/data/golge.db
+Okuma modu: salt-okunur; worker üzerinde değişiklik YOK
+Tablolar: decisions, paper_state, positions, shadow_evaluations, shadow_trades, sqlite_sequence
+
+1. Karar sayıları / parite
+  AVAX-USDT / APPROVED_PAPER: 1
+  AVAX-USDT / NO_DECISION: 19
+  AVAX-USDT / TECHNICAL_BLOCK: 47
+  BTC-USDT / NO_DECISION: 15
+  BTC-USDT / TECHNICAL_BLOCK: 53
+  ETH-USDT / NO_DECISION: 11
+  ETH-USDT / TECHNICAL_BLOCK: 56
+
+2. Son altı karar — min emir / tavan ilişkisi
+  decisions alanları: id, symbol, signal_action, signal_reason, signal_origin, status, rule, explanation, notional_usdt, market_source, ref_id, created_at
+    id=202 | created_at=2026-10-17 14:32:07 TRT | symbol=ETH-USDT | status=NO_DECISION | rule=DATA | market_source=ATK_LIVE_MARKET
+    id=201 | created_at=2026-10-17 14:32:06 TRT | symbol=BTC-USDT | status=NO_DECISION | rule=DATA | market_source=ATK_LIVE_MARKET
+    id=200 | created_at=2026-10-17 14:32:05 TRT | symbol=AVAX-USDT | status=TECHNICAL_BLOCK | rule=MIN_ORDER | market_source=ATK_LIVE_MARKET
+    id=199 | created_at=2026-10-17 14:31:04 TRT | symbol=ETH-USDT | status=TECHNICAL_BLOCK | rule=MIN_ORDER | market_source=ATK_LIVE_MARKET
+    id=198 | created_at=2026-10-17 14:31:03 TRT | symbol=BTC-USDT | status=TECHNICAL_BLOCK | rule=MIN_ORDER | market_source=ATK_LIVE_MARKET
+    id=197 | created_at=2026-10-17 14:31:02 TRT | symbol=AVAX-USDT | status=TECHNICAL_BLOCK | rule=MIN_ORDER | market_source=ATK_LIVE_MARKET
+
+3. PAPER açık pozisyonları
+  Durumlar: {'OPEN': 1}
+  positions alanları: id, symbol, entry_price, notional_usdt, quantity, stop_loss_price, opened_at, closed_at, status, mode, close_reason
+    id=1 | symbol=AVAX-USDT | notional_usdt=12.50 | entry_price=9.99 | status=OPEN | opened_at=2026-10-17 13:23:14 TRT
+
+3b. Anayasa tavanı vs min emir
+  PAPER bakiye: 37.48750 USDT | anayasal tavan (%25): 9.3718750 USDT
+  Borsa min emir (adapter varsayılanı): 10 USDT
+  MIN_ORDER beklenen: tavan min emrin altında; yeni PAPER açılmaz (risk engeli değil, teknik blok).
+  Açık PAPER pozisyon: 1 (bakiye düşük; demo analist hâlâ BUY verebilir).
+  165 gölge değerlendirme PENDING; feed_source vade dolunca yazılır.
+
+4. Gölge vade alanları ve değerlendirme örnekleri
+  shadow_trades alanları: id, symbol, category, entry_ask, notional_usdt, reason, constitution_rule, created_at, source, target_15_at, target_60_at
+    id=156 | symbol=AVAX-USDT | category=TECHNICAL_UNEXECUTABLE
+    id=155 | symbol=ETH-USDT | category=TECHNICAL_UNEXECUTABLE
+    id=154 | symbol=BTC-USDT | category=TECHNICAL_UNEXECUTABLE
+  shadow_evaluations alanları: shadow_id, horizon_minutes, status, exit_bid, pnl_usdt, evaluated_at, note, feed_source
+    status=PENDING | feed_source=
+    status=PENDING | feed_source=
+    status=PENDING | feed_source=
