@@ -13,7 +13,10 @@ from core.user_rules import apply_user_request
 
 st.set_page_config(page_title="Gölge Defter — Live Proof", layout="wide")
 st.title("GÖLGE DEFTER — Live Proof")
-st.caption("PAPER ONLY · SQLite salt okunur · Worker döngüsü burada çalıştırılmaz")
+st.caption(
+    "PAPER ONLY · Birincil kokpit: bash scripts/start_kokpit.sh → http://127.0.0.1:8501 "
+    "(bu Streamlit sayfası yedek)"
+)
 
 rules = ConstitutionRules()
 db_path = st.sidebar.text_input("SQLite (ro)", value="data/golge.db")

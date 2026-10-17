@@ -5,7 +5,7 @@ Son güncelleme: 2026-10-17 ~14:35 TRT · Worker **rules_v2 restart yapıldı** 
 | Alan | Değer |
 | --- | --- |
 | Repo | https://github.com/hazarkasap/golge-defter (private; jüriye invite) |
-| Canlı kokpit | `streamlit run dashboard/kokpit_proof.py` → http://localhost:8501 |
+| Canlı kokpit | `bash scripts/start_kokpit.sh` → http://127.0.0.1:8501 (yedek: `streamlit run dashboard/kokpit_proof.py`) |
 | Yedek video | _(17:30–18:00 çekim — link buraya)_ |
 | ATK modu | Salt okunur MCP (`npx @okx_ai/okx-trade-mcp --modules market --read-only`) |
 | ATK kanıtı (Bonus 1) | Read-only MCP + canlı `ATK_LIVE_MARKET` kararları; spot emir: _(15:30 veya "TR demo yok")_ |

@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="tr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gölge Defter — Live Proof</title>
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <h1>GÖLGE DEFTER</h1>
+        <span class="sub">Live Proof</span>
+      </div>
+      <div class="badges">
+        <span class="badge paper">PAPER ONLY</span>
+        <span id="worker-badge" class="badge warn">Worker …</span>
+        <span id="rules-badge" class="badge muted">rules …</span>
+      </div>
+    </header>
+
+    <section class="metrics" id="metric-strip"></section>
+
+    <main class="grid">
+      <article class="panel" id="panel-system">
+        <h2>Canlı sistem</h2>
+        <div class="panel-body" id="system-body"></div>
+      </article>
+
+      <article class="panel" id="panel-constitution">
+        <h2>Yatırım Anayasası</h2>
+        <div class="panel-body" id="constitution-body"></div>
+      </article>
+
+      <article class="panel wide" id="panel-shadow">
+        <h2>Gölge Defter</h2>
+        <div class="panel-body" id="shadow-body"></div>
+      </article>
+
+      <article class="panel wide" id="panel-analyst">
+        <h2>Analist kararları</h2>
+        <div class="chips" id="decision-chips"></div>
+        <div class="panel-body cards" id="decisions-body"></div>
+      </article>
+
+      <article class="panel wide" id="panel-sim">
+        <h2>Kullanıcı kuralı simülasyonu</h2>
+        <p class="hint">DB yazmaz. Teslim demosu: &quot;Bakiyemin %80'i ile al&quot; veya makas sıkılaştırma.</p>
+        <form id="sim-form" class="sim-form">
+          <input id="sim-input" type="text" value="Bakiyemin %80'i ile al" autocomplete="off" />
+          <button type="submit">Simüle et</button>
+        </form>
+        <div id="sim-result" class="sim-result"></div>
+      </article>
+
+      <article class="panel" id="panel-chain">
+        <h2>Zincir kanıtı</h2>
+        <div class="panel-body" id="chain-body"></div>
+      </article>
+    </main>
+
+    <footer class="footer">
+      <span id="footer-db"></span>
+      <span id="footer-updated"></span>
+      <span>Salt okunur · Worker döngüsü burada çalışmaz</span>
+    </footer>
+    <script src="/assets/app.js" defer></script>
+  </body>
+</html>

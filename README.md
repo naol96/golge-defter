@@ -41,7 +41,8 @@ python -m golge_defter.demo
 python main.py --source atk --symbol BTC-USDT
 python report.py --db data/golge.db
 bash start_atk.sh   # arka planda ATK_LIVE_MARKET worker
-streamlit run dashboard/kokpit_proof.py  # salt okunur 4 panel
+bash scripts/start_kokpit.sh          # koyu tema kokpit → http://127.0.0.1:8501
+streamlit run dashboard/kokpit_proof.py  # yedek (Streamlit)
 ```
 
 Kanıt raporu (worker `data/golge.db` kullanır; boş `live_market_paper.db` yanlış dosyadır):
