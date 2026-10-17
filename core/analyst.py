@@ -58,6 +58,10 @@ def llm_signal(market: MarketSnapshot) -> AnalystSignal:
         "Yalnızca JSON döndür: "
         '{"symbol":"' + market.symbol + '","action":"BUY veya PASS","reason":"tek cümle"}'
     )
+    api_url = os.environ.get(
+        "GOLGE_LLM_API_URL",
+        "https://api.openai.com/v1/chat/completions",
+    ).strip()
     body = json.dumps(
         {
             "model": os.environ.get("GOLGE_LLM_MODEL", "gpt-4o-mini"),
@@ -72,7 +76,7 @@ def llm_signal(market: MarketSnapshot) -> AnalystSignal:
         }
     ).encode()
     req = urllib.request.Request(
-        "https://api.openai.com/v1/chat/completions",
+        api_url,
         data=body,
         headers={
             "Authorization": f"Bearer {api_key}",
