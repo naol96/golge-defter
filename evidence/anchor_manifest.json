@@ -1,10 +1,10 @@
 {
   "label": "golge_batch",
   "db": "/home/hazar/golge-defter/data/golge.db",
-  "decision_count": 202,
+  "decision_count": 211,
   "batch_limit": 200,
-  "sha256": "601424a3bafded954948894360268b30664e97218c4f25d366be0624a98ec512",
-  "generated_at": "2026-10-17T11:32:28.605027+00:00",
+  "sha256": "a860db7514faae1e15e34aa84a5616e620aabe88b68203e45448bdd754ae4936",
+  "generated_at": "2026-10-17T11:34:48.894109+00:00",
   "fuji_contract": "",
   "snowtrace_tx": "",
   "note": "Set FUJI_* env after on-chain anchor; worker DB is read-only here."

@@ -1,6 +1,6 @@
 # Teslim Kartı (Gölge Defter)
 
-Son güncelleme: 2026-10-17 ~14:33 TRT · Worker **aktif (restart öncesi)** · DB: `data/golge.db`
+Son güncelleme: 2026-10-17 ~14:35 TRT · Worker **rules_v2 restart yapıldı** · DB: `data/golge.db`
 
 | Alan | Değer |
 | --- | --- |
@@ -11,9 +11,9 @@ Son güncelleme: 2026-10-17 ~14:33 TRT · Worker **aktif (restart öncesi)** · 
 | ATK kanıtı (Bonus 1) | Read-only MCP + canlı `ATK_LIVE_MARKET` kararları; spot emir: _(15:30 veya "TR demo yok")_ |
 | Fuji sözleşme | Yerel manifest hazır; on-chain: `FUJI_ANCHOR_CONTRACT` + cüzdan gerekli |
 | Snowtrace tx (≥2) | _(henüz yok — `evidence/anchor_manifest.json` sha256 kanıtı var)_ |
-| Gölge Defter özet | **202** ATK karar · **1** PAPER · **128×** 15dk · **19×** 60dk COMPLETE (`ATK_LIVE_MARKET`) · gölge id **1–3** 15+60 çifti · SHADOW_RISK canlı **0** (MIN_ORDER); anayasa veto: `evidence/shadow_risk_atk.db` + `evidence/shadow_risk_proof.json` |
+| Gölge Defter özet | **208+** ATK karar · **1** PAPER · **128×** 15dk · **19×** 60dk COMPLETE · **canlı SHADOW_RISK** (Kural 2 `EXPOSURE`, `rules_v2`) + Hamle A SPREAD ayrı DB |
 | Analist | DEMO (canlı worker) |
-| Kural sürümü | Kod `rules_v2`; canlı süreç restart öncesi eski MIN_ORDER → **`bash scripts/restart_atk_worker.sh` ~15:00** |
+| Kural sürümü | Canlı worker **`rules_v2`** (`decisions.rules_version`); restart: `bash scripts/restart_atk_worker.sh` |
 
 ## Kanıt komutları
 

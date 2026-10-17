@@ -4,32 +4,33 @@
 
 ## Kararlar (durum)
 - APPROVED_PAPER: 1
-- NO_DECISION: 45
-- TECHNICAL_BLOCK: 156
+- NO_DECISION: 47
+- SHADOW_RISK: 3
+- TECHNICAL_BLOCK: 159
 
 ## Kararlar (piyasa kaynağı)
-- ATK_LIVE_MARKET: 202
+- ATK_LIVE_MARKET: 210
 
 ## Gölge defter
-- Kategori: {'TECHNICAL_UNEXECUTABLE': 156}
-- feed_source: {'ATK_LIVE_MARKET': 156}
+- Kategori: {'CONSTITUTIONAL_RISK_BLOCK': 3, 'TECHNICAL_UNEXECUTABLE': 159}
+- feed_source: {'ATK_LIVE_MARKET': 162}
 
 ## 15/60 değerlendirme
-- Durum: {'COMPLETE': 147, 'PENDING': 165}
-- Bekleyen: 165
-- Tamamlanan 15 dk: 128 (ATK canlı: 128)
-- Tamamlanan 60 dk: 19 (ATK canlı: 19)
+- Durum: {'COMPLETE': 158, 'PENDING': 166}
+- Bekleyen: 166
+- Tamamlanan 15 dk: 131 (ATK canlı: 131)
+- Tamamlanan 60 dk: 27 (ATK canlı: 27)
 
 ## Engelleme sınıflandırması
-- TECHNICAL_BLOCK (min emir / icra): 156
-- SHADOW_RISK (Anayasa): 0
+- TECHNICAL_BLOCK (min emir / icra): 159
+- SHADOW_RISK (Anayasa): 3
 
 ## PAPER durumu
 - Bakiye: 37.48750 USDT
 - Açık pozisyon: 1
 
 ## Son karar
-- id=202 status=NO_DECISION symbol=ETH-USDT market_source=ATK_LIVE_MARKET
+- id=210 status=NO_DECISION symbol=BTC-USDT market_source=ATK_LIVE_MARKET
 
 ## Notlar
 - PAPER only; no LIVE orders.
