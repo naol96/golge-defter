@@ -12,9 +12,12 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=7", "pytest-xdist>=3"]
+dashboard = ["streamlit>=1.28"]
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = [".", "src"]
+include = ["contracts*", "core*", "adapters*", "storage*", "dashboard*", "golge_defter*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
