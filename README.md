@@ -61,6 +61,8 @@ Yatırım Anayasası / risk kuralları
 - `tests/`: Kritik güvenlik kontrollerinin birim testleri.
 - `docs/architecture.md`: Mimari, güvenlik ve değerlendirme standartları.
 - `docs/roadmap.md`: Uygulama planı ve tamamlanmamış modüller.
+- `AGENTS.md` ve `docs/agents/`: Hackathon ajan rolleri, test disiplini ve faz rapor şablonu.
+- `docs/reports/`: Faz sonu değişiklik raporları.
 - `scripts/publish.sh`: GitHub CLI ile yeni **private** depo oluşturup push etme yardımcısı.
 
 ## Bağlantılar
