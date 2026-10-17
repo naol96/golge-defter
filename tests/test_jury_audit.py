@@ -291,3 +291,119 @@ def test_atk_unknown_minimum_fails_closed(monkeypatch):
     monkeypatch.setattr(adapter,"_call_tool",tool)
     with pytest.raises(RuntimeError,match="minimum unavailable"):
         adapter.fetch_snapshot("AVAX-USDT")
+
+
+def test_atk_mcp_notifications_share_three_second_deadline(monkeypatch):
+    """Controlled clock: initialization consumes budget; tool gets the remainder."""
+    import io,json
+    import adapters.okx_atk as module
+    clock=[0.0]
+    class Stream(io.StringIO):
+        def readline(self):
+            clock[0]+=0.9
+            return super().readline()
+    class Process:
+        stdin=io.StringIO()
+        stdout=Stream('\n'.join(json.dumps(p) for p in [
+            {"jsonrpc":"2.0","method":"notification"},
+            {"jsonrpc":"2.0","id":1,"result":{}},
+            {"jsonrpc":"2.0","method":"notification"},
+            {"jsonrpc":"2.0","method":"notification"},
+            {"jsonrpc":"2.0","id":2,"result":{"content":[]}},
+        ])+'\n')
+        def terminate(self): pass
+        def wait(self,timeout=None): pass
+    monkeypatch.setattr(module.subprocess,"Popen",lambda *a,**kw: Process())
+    monkeypatch.setattr(module.time,"monotonic",lambda:clock[0])
+    with pytest.raises(TimeoutError):
+        OkxAtkMarketAdapter(timeout_seconds=3)._call_tool("market_get_ticker",{})
+
+
+def test_snapshot_deadline_is_shared_by_ticker_and_instrument(monkeypatch):
+    import adapters.okx_atk as module
+    clock=[0.0]; budgets=[]
+    def tool(self,name,args,**kwargs):
+        budgets.append(kwargs["timeout_seconds"])
+        clock[0]+=2
+        rows=[{"ts":str(NOW*1000),"bidPx":"99.9","askPx":"100"}] if name=="market_get_ticker" else [{"minSz":".01","lotSz":".01"}]
+        return {"data":{"data":rows}}
+    monkeypatch.setattr(module.time,"monotonic",lambda:clock[0])
+    monkeypatch.setattr(module.OkxAtkMarketAdapter,"_call_tool",tool)
+    with pytest.raises(TimeoutError):
+        module.OkxAtkMarketAdapter().fetch_snapshot("AVAX-USDT")
+    assert budgets == [3,1]
+
+
+def test_worker_time_is_taken_after_fetch(monkeypatch,tmp_path):
+    import shadow_agent
+    clock=[NOW]
+    def fetch(self,symbol):
+        clock[0]+=2
+        return market(at=clock[0])
+    monkeypatch.setattr(shadow_agent.time,"time",lambda:clock[0])
+    monkeypatch.setattr(shadow_agent.MockMarketAdapter,"fetch_snapshot",fetch)
+    db=Database(tmp_path/"clock.db")
+    shadow_agent.run_cycle(db,symbols=["AVAX-USDT"],source="mock",analyst="demo")
+    assert build_kokpit_snapshot(db.path)["recent_decisions"][0]["status"] == "APPROVED_PAPER"
+
+
+def test_early_late_and_immutable_evaluation(tmp_path):
+    db=Database(tmp_path/"timing.db"); sid=shadow(db)
+    assert evaluate_due_shadows(db,market(at=NOW+899),NOW+899)==0
+    assert evaluate_due_shadows(db,market(at=NOW+1021,bid="99"),NOW+1021)==1
+    with db.session() as conn:
+        first=dict(conn.execute("SELECT * FROM shadow_evaluations WHERE shadow_id=? AND horizon_minutes=15",(sid,)).fetchone())
+    assert "LATE_EVALUATION" in first["note"]
+    assert evaluate_due_shadows(db,market(at=NOW+1100,bid="90"),NOW+1100)==0
+    with db.session() as conn:
+        second=dict(conn.execute("SELECT * FROM shadow_evaluations WHERE shadow_id=? AND horizon_minutes=15",(sid,)).fetchone())
+    assert first==second
+
+
+def test_position_provenance_migration_recovers_from_matching_decision(tmp_path):
+    db=Database(tmp_path/"migration.db")
+    result,ref=run_decision_cycle(db,rules=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","BUY","MOCK"),market=market(source="ATK_LIVE_MARKET"),now=NOW)
+    assert result.status=="APPROVED_PAPER"
+    with db.session() as conn:
+        conn.execute("UPDATE positions SET market_source='' WHERE id=?",(ref,))
+    migrated=Database(db.path)
+    with migrated.session() as conn:
+        assert conn.execute("SELECT market_source FROM positions WHERE id=?",(ref,)).fetchone()[0]=="ATK_LIVE_MARKET"
+    assert monitor_open_positions(migrated,market(source="MOCK",bid="95"),NOW,utc_day(NOW))==[]
+    assert monitor_open_positions(migrated,market(source="ATK_LIVE_MARKET",bid="95"),NOW,utc_day(NOW))==[ref]
+
+
+@pytest.mark.parametrize("bid,should_close",[("97.50001",False),("97.5",True),("90",True)])
+def test_stop_threshold_and_gap_execute_at_actual_bid(tmp_path,bid,should_close):
+    db=Database(tmp_path/"threshold.db")
+    position=open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW)
+    closed=monitor_open_positions(db,market(bid=bid),NOW,utc_day(NOW))
+    assert closed==([position.id] if should_close else [])
+    if should_close:
+        expected=-(shadow_pnl(D("100"),D(bid),D("25")))
+        assert db.get_daily_loss(utc_day(NOW))==expected
+
+
+def test_daily_loss_resets_on_utc_boundary_but_includes_new_close(tmp_path):
+    from datetime import datetime,timezone
+    midnight=int(datetime(2026,10,18,tzinfo=timezone.utc).timestamp())
+    db=Database(tmp_path/"midnight.db")
+    db.add_daily_loss(utc_day(midnight-1),D("5"))
+    open_paper_position(db,market=market(at=midnight-1),notional_usdt=D("25"),rules=ConstitutionRules(),now=midnight-1)
+    monitor_open_positions(db,market(at=midnight,bid="95"),midnight,utc_day(midnight))
+    assert db.get_daily_loss(utc_day(midnight))==D("1.29875")
+
+
+@pytest.mark.parametrize("source",["MOCK","ATK_LIVE_MARKET"])
+def test_stale_decision_creates_neither_paper_nor_shadow(tmp_path,source):
+    db=Database(tmp_path/"stale.db")
+    decision,ref=run_decision_cycle(db,rules=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","BUY","audit"),market=market(at=NOW-11,source=source),now=NOW)
+    snap=build_kokpit_snapshot(db.path)
+    assert decision.status=="NO_DECISION" and ref is None
+    assert snap["open_positions"]==snap["recent_shadow"]==[]
+
+
+def test_due_time_requires_quote_from_horizon_not_just_fresh_quote(tmp_path):
+    db=Database(tmp_path/"horizon-quote.db"); shadow(db)
+    assert evaluate_due_shadows(db,market(at=NOW+899),NOW+900)==0
+    assert evaluate_due_shadows(db,market(at=NOW+900),NOW+900)==1

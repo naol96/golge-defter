@@ -63,8 +63,8 @@ function kvHtml(rows) {
 function renderMetrics(snap) {
   const r = snap.report || {};
   const items = [
-    ["15 dk · canlı veri gözlemi", r.complete_15m_live_feed ?? "—"],
-    ["60 dk · canlı veri gözlemi", r.complete_60m_live_feed ?? "—"],
+    ["15 dk · ATK kökenli gözlem", r.complete_15m_live_feed ?? "—"],
+    ["60 dk · ATK kökenli gözlem", r.complete_60m_live_feed ?? "—"],
     ["Risk nedeniyle engellenen", r.decisions_shadow_risk ?? 0],
     ["Teknik blok", r.decisions_technical_block ?? 0],
     ["PAPER bakiye", `${fmtUsdt(snap.paper_balance_usdt, 2)} USDT`],
@@ -116,7 +116,7 @@ function renderConstitution(snap) {
     ["Stop", `%${c.stop_loss_pct}`],
     ["Günlük zarar", `En fazla ${c.gunluk_zarar_usdt} USDT ve gün başı %${c.gunluk_zarar_pct}`],
     ["Bekleme", `${c.bekleme_dk} dk / parite`],
-    ["Gözlem eşiği", `${c.gozlem_esigi_usdt} USDT`],
+    ["Minimum emir", "Veri adaptöründen · teknik kayıt"],
     ["Açık pozisyonlar", pos || "—"],
   ]);
 }

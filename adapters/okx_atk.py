@@ -77,6 +77,18 @@ class OkxAtkMarketAdapter(MarketAdapter):
                 raise item
             return item
 
+        def response_for(request_id: int) -> dict:
+            while True:
+                line = read_line(deadline - time.monotonic())
+                if not line:
+                    raise TimeoutError(f"OKX ATK MCP response timeout: {name}")
+                response = json.loads(line)
+                if response.get("id") != request_id:
+                    continue  # MCP notifications do not extend the shared deadline.
+                if response.get("error"):
+                    raise RuntimeError(str(response["error"]))
+                return response
+
         try:
             send(
                 {
@@ -90,8 +102,7 @@ class OkxAtkMarketAdapter(MarketAdapter):
                     },
                 }
             )
-            if not read_line(deadline - time.monotonic()):
-                raise TimeoutError("OKX ATK MCP initialize timeout")
+            response_for(1)
             send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
             send(
                 {
@@ -101,12 +112,9 @@ class OkxAtkMarketAdapter(MarketAdapter):
                     "params": {"name": name, "arguments": arguments},
                 }
             )
-            line = read_line(deadline - time.monotonic())
-            if not line:
-                raise TimeoutError(f"OKX ATK MCP tool timeout: {name}")
-            payload = json.loads(line)
-            if payload.get("error"):
-                raise RuntimeError(str(payload["error"]))
+            payload = response_for(2)
+            if payload.get("result", {}).get("isError"):
+                raise RuntimeError("ATK MCP tool returned isError")
             content = payload.get("result", {}).get("content", [])
             if not content:
                 raise RuntimeError("empty MCP tool response")

@@ -1,0 +1,6 @@
+[MOCK / SIMULATED] Gerçek OKX verisi veya emir icrası yoktur.
+Anayasa: Talep %80.00 mevcut sert sınırı aşıyor; etkin tavan %25.00 olarak korundu.
+Başarılı PAPER adayı: APPROVED_PAPER, tutar=12.50 USDT, kural=OK
+Minimum lot engeli: TECHNICAL_BLOCK, tutar=7.50 USDT, kural=MIN_ORDER
+Spread engeli: SHADOW_RISK, tutar=20.00 USDT, kural=SPREAD
+Pas gözlemi: SHADOW_PASS, tutar=12.50 USDT, kural=ANALYST

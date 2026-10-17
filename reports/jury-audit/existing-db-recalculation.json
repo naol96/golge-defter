@@ -1,0 +1,26 @@
+{
+  "source_db": "/home/hazar/golge-defter/data/golge.db",
+  "method": "READ_ONLY_BACKUP_RECALCULATION",
+  "decisions": {
+    "APPROVED_PAPER": 1,
+    "NO_DECISION": 75,
+    "SHADOW_RISK": 78,
+    "TECHNICAL_BLOCK": 159
+  },
+  "signal_origins": {
+    "DEMO": 313
+  },
+  "market_sources": {
+    "ATK_LIVE_MARKET": 313
+  },
+  "completed_horizons": {
+    "15": 205,
+    "60": 118
+  },
+  "pnl_mismatches": [],
+  "before_due": [],
+  "mixed_source_results": 0,
+  "legacy_missing_limited_stop_notes": 323,
+  "dashboard_counter_consistency": "PASS",
+  "note": "Stored arithmetic only. Historical quote age is not persisted, so historical freshness is unverified. No production records modified."
+}

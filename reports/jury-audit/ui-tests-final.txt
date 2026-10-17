@@ -1,0 +1,13 @@
+✔ PnL exact display rounding, grouping and very small signed values (2.351071ms)
+✔ Shadow table exposes origins, precision, target/actual time and limitations (12.34804ms)
+✔ Decision table escapes untrusted explanation and shows signal origin (1.073221ms)
+✔ Local SHA and a supplied transaction URL never become verified chain proof (0.99248ms)
+✔ Theme switch remains functional (0.741741ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 22.99837

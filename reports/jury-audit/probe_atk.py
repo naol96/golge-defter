@@ -8,6 +8,10 @@ from pathlib import Path
 import sys
 import tempfile
 import time
+import threading
+from http.server import ThreadingHTTPServer
+from urllib.request import urlopen
+from urllib.parse import urlencode
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
@@ -16,6 +20,7 @@ from contracts.models import ConstitutionRules
 from core.analyst import resolve_signal
 from core.decision_engine import run_decision_cycle
 from dashboard.snapshot import build_kokpit_snapshot
+from dashboard.serve_kokpit import KokpitHandler
 from storage.database import Database
 
 started = time.monotonic()
@@ -23,10 +28,30 @@ try:
     tick = OkxAtkMarketAdapter().fetch_snapshot("AVAX-USDT")
     now = int(time.time())
     signal = resolve_signal(tick, analyst="demo")
-    with tempfile.TemporaryDirectory(prefix="golge-live-audit-") as directory:
+    with tempfile.TemporaryDirectory(prefix="golge-live-audit-", dir=Path(__file__).resolve().parents[2] / "data") as directory:
         db = Database(Path(directory) / "isolated.db")
         decision, ref = run_decision_cycle(db, rules=ConstitutionRules(), signal=signal, market=tick, now=now)
-        snap = build_kokpit_snapshot(db.path)
+        shadow_decision, shadow_ref = run_decision_cycle(
+            db, rules=ConstitutionRules(), signal=signal, market=tick, now=int(time.time())
+        )
+        # Exercise the actual JSON and HTML endpoints, not just an internal render.
+        server = ThreadingHTTPServer(("127.0.0.1", 0), KokpitHandler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            base = f"http://127.0.0.1:{server.server_port}"
+            relative_db = db.path.relative_to(Path(__file__).resolve().parents[2])
+            with urlopen(base + "/api/snapshot?" + urlencode({"db": str(relative_db)}), timeout=3) as response:
+                snap = json.load(response)
+            with urlopen(base + "/", timeout=3) as response:
+                assert 'id="shadow-body"' in response.read().decode()
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
+        assert snap["decisions_summary"].get("APPROVED_PAPER") == 1
+        assert snap["decisions_summary"].get("SHADOW_RISK") == 1
+
         result = {
             "probe": "ACTUAL_READ_ONLY_ATK_TO_ISOLATED_PAPER_DASHBOARD",
             "elapsed_s": round(time.monotonic() - started, 3),
@@ -36,6 +61,8 @@ try:
             "signal_origin": signal.origin,
             "status": decision.status,
             "rule": decision.rule,
+            "shadow_branch": {"status": shadow_decision.status, "rule": shadow_decision.rule, "ref": shadow_ref},
+            "http_dashboard": "HTML and /api/snapshot verified",
             "notional_usdt": str(decision.notional_usdt),
             "dashboard_counts": snap["decisions_summary"],
             "paper_positions": len(snap["open_positions"]),

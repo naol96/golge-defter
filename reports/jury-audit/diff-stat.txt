@@ -1,0 +1,23 @@
+ README.md                     |   6 +-
+ adapters/okx_atk.py           |  98 ++++++----
+ chain/anchor_job.py           |  46 +++--
+ contracts/models.py           |  16 +-
+ core/analyst.py               |  18 +-
+ core/constitution.py          |  44 ++---
+ core/decision_engine.py       |   7 +-
+ core/paper_broker.py          |   8 +-
+ core/position_monitor.py      |  16 +-
+ core/shadow_evaluator.py      |  17 +-
+ dashboard/app.py              |   3 +-
+ dashboard/kokpit/app.js       |  53 ++++--
+ dashboard/kokpit/index.html   |   2 +-
+ dashboard/snapshot.py         |  32 ++--
+ docs/spec-decisions.md        |  11 +-
+ docs/yatirim_anayasasi.md     |  14 +-
+ main.py                       |   3 +-
+ report.py                     |  41 ++++-
+ shadow_agent.py               |   7 +-
+ storage/database.py           |  15 ++
+ tests/test_constitution_v2.py |   5 +-
+ tests/test_jury_audit.py      | 409 ++++++++++++++++++++++++++++++++++++++++++
+ 22 files changed, 711 insertions(+), 160 deletions(-)

@@ -36,7 +36,7 @@ def evaluate_due_shadows(db: Database, market: MarketSnapshot, now: int) -> int:
         for row in rows:
             horizon = int(row["horizon_minutes"])
             due_at = int(row["target_15_at"] if horizon == 15 else row["target_60_at"])
-            if now < due_at:
+            if now < due_at or market.captured_at < due_at:
                 continue
             entry = Decimal(str(row["entry_ask"]))
             notional = Decimal(str(row["notional_usdt"]))

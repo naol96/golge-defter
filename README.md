@@ -4,6 +4,10 @@
 
 > **Durum:** Hackathon MVP (PAPER). OKX ATK **salt okunur** piyasa verisi desteklenir; gerçek emir gönderimi **yoktur**.
 
+## Jüri denetimi
+
+Güncel test çıktıları, gerçek ATK uçtan uca kontrolü ve kalan kanıt sınırları: [denetim raporu](reports/jury-audit/summary.md). ATK piyasa verisi ile DEMO/LLM sinyal kökenleri ayrıdır. Yerel SHA-256, doğrulanmış blockchain kanıtı değildir. Günlük zarar sınırı `min(gün başı bakiye × %5, 5 USDT)` olarak uygulanır (`rules_v2_audit1`).
+
 ## Amaç
 
 Kâr vaat eden bir alım satım botu yerine, yapay zekâ sinyallerini deterministik yatırım kurallarıyla denetleyen ve **engellenen ya da pas geçilen** aday işlemleri Gölge Defter'de görünür kılan bir mimari.
@@ -23,7 +27,7 @@ Kâr vaat eden bir alım satım botu yerine, yapay zekâ sinyallerini determinis
 | İzinli pariteler | `AVAX-USDT`, `BTC-USDT`, `ETH-USDT` |
 | En yüksek spread | %0,15 |
 | Stop-loss sınırı | %2,5 |
-| Günlük gerçekleşmiş zarar sınırı | Gün başı bakiyenin %5'i (`rules_v2`) |
+| Günlük gerçekleşmiş zarar sınırı | Gün başı bakiyenin %5'i ile 5 USDT sınırından küçüğü (`rules_v2_audit1`) |
 | Açık pozisyon / toplam risk | En fazla 2 pozisyon, toplam %50 |
 | Parite bekleme | Kapanıştan sonra 15 dk |
 | Veri yaşı | En fazla 10 saniye |

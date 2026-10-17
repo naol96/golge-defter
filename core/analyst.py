@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from decimal import Decimal
 from typing import Any
 
 from contracts.models import AnalystSignal, MarketSnapshot
@@ -23,7 +24,7 @@ def validate_analyst_payload(payload: dict[str, Any]) -> AnalystSignal:
 def demo_signal(market: MarketSnapshot) -> AnalystSignal:
     """Explicitly labeled demo signal for MVP when no LLM credentials are configured."""
     spread = (market.ask - market.bid) / market.ask
-    if spread <= 0.0015:
+    if spread <= Decimal("0.0015"):
         return AnalystSignal(
             symbol=market.symbol,
             action="BUY",

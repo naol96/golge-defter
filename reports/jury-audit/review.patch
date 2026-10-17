@@ -1,0 +1,1502 @@
+diff --git a/README.md b/README.md
+index dc0ebe3..94e270c 100644
+--- a/README.md
++++ b/README.md
+@@ -4,6 +4,10 @@
+ 
+ > **Durum:** Hackathon MVP (PAPER). OKX ATK **salt okunur** piyasa verisi desteklenir; gerçek emir gönderimi **yoktur**.
+ 
++## Jüri denetimi
++
++Güncel test çıktıları, gerçek ATK uçtan uca kontrolü ve kalan kanıt sınırları: [denetim raporu](reports/jury-audit/summary.md). ATK piyasa verisi ile DEMO/LLM sinyal kökenleri ayrıdır. Yerel SHA-256, doğrulanmış blockchain kanıtı değildir. Günlük zarar sınırı `min(gün başı bakiye × %5, 5 USDT)` olarak uygulanır (`rules_v2_audit1`).
++
+ ## Amaç
+ 
+ Kâr vaat eden bir alım satım botu yerine, yapay zekâ sinyallerini deterministik yatırım kurallarıyla denetleyen ve **engellenen ya da pas geçilen** aday işlemleri Gölge Defter'de görünür kılan bir mimari.
+@@ -23,7 +27,7 @@ Kâr vaat eden bir alım satım botu yerine, yapay zekâ sinyallerini determinis
+ | İzinli pariteler | `AVAX-USDT`, `BTC-USDT`, `ETH-USDT` |
+ | En yüksek spread | %0,15 |
+ | Stop-loss sınırı | %2,5 |
+-| Günlük gerçekleşmiş zarar sınırı | Gün başı bakiyenin %5'i (`rules_v2`) |
++| Günlük gerçekleşmiş zarar sınırı | Gün başı bakiyenin %5'i ile 5 USDT sınırından küçüğü (`rules_v2_audit1`) |
+ | Açık pozisyon / toplam risk | En fazla 2 pozisyon, toplam %50 |
+ | Parite bekleme | Kapanıştan sonra 15 dk |
+ | Veri yaşı | En fazla 10 saniye |
+diff --git a/adapters/okx_atk.py b/adapters/okx_atk.py
+index 4abff2e..67e231c 100644
+--- a/adapters/okx_atk.py
++++ b/adapters/okx_atk.py
+@@ -24,7 +24,11 @@ class OkxAtkMarketAdapter(MarketAdapter):
+         self.min_order_usdt = min_order_usdt
+         self.timeout_seconds = timeout_seconds
+ 
+-    def _call_tool(self, name: str, arguments: dict) -> dict:
++    def _call_tool(self, name: str, arguments: dict, *, timeout_seconds: float | None = None) -> dict:
++        budget = self.timeout_seconds if timeout_seconds is None else timeout_seconds
++        if budget <= 0:
++            raise TimeoutError("OKX ATK snapshot deadline exceeded")
++        deadline = time.monotonic() + budget
+         cmd = [
+             "npx",
+             "-y",
+@@ -39,7 +43,7 @@ class OkxAtkMarketAdapter(MarketAdapter):
+             cmd,
+             stdin=subprocess.PIPE,
+             stdout=subprocess.PIPE,
+-            stderr=subprocess.PIPE,
++            stderr=subprocess.DEVNULL,
+             text=True,
+             bufsize=0,
+         )
+@@ -50,6 +54,8 @@ class OkxAtkMarketAdapter(MarketAdapter):
+             proc.stdin.flush()
+ 
+         def read_line(timeout: float) -> str | None:
++            if timeout <= 0:
++                return None
+             q: Queue[str | Exception] = Queue()
+ 
+             def worker() -> None:
+@@ -71,6 +77,18 @@ class OkxAtkMarketAdapter(MarketAdapter):
+                 raise item
+             return item
+ 
++        def response_for(request_id: int) -> dict:
++            while True:
++                line = read_line(deadline - time.monotonic())
++                if not line:
++                    raise TimeoutError(f"OKX ATK MCP response timeout: {name}")
++                response = json.loads(line)
++                if response.get("id") != request_id:
++                    continue  # MCP notifications do not extend the shared deadline.
++                if response.get("error"):
++                    raise RuntimeError(str(response["error"]))
++                return response
++
+         try:
+             send(
+                 {
+@@ -84,8 +102,7 @@ class OkxAtkMarketAdapter(MarketAdapter):
+                     },
+                 }
+             )
+-            if not read_line(self.timeout_seconds):
+-                raise TimeoutError("OKX ATK MCP initialize timeout")
++            response_for(1)
+             send({"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}})
+             send(
+                 {
+@@ -95,12 +112,9 @@ class OkxAtkMarketAdapter(MarketAdapter):
+                     "params": {"name": name, "arguments": arguments},
+                 }
+             )
+-            line = read_line(self.timeout_seconds)
+-            if not line:
+-                raise TimeoutError(f"OKX ATK MCP tool timeout: {name}")
+-            payload = json.loads(line)
+-            if payload.get("error"):
+-                raise RuntimeError(str(payload["error"]))
++            payload = response_for(2)
++            if payload.get("result", {}).get("isError"):
++                raise RuntimeError("ATK MCP tool returned isError")
+             content = payload.get("result", {}).get("content", [])
+             if not content:
+                 raise RuntimeError("empty MCP tool response")
+@@ -112,48 +126,54 @@ class OkxAtkMarketAdapter(MarketAdapter):
+         finally:
+             proc.terminate()
+             try:
+-                proc.wait(timeout=1)
++                proc.wait(timeout=0.1)
+             except subprocess.TimeoutExpired:
+                 proc.kill()
++                proc.wait()
++            proc.stdin.close()
++            proc.stdout.close()
+ 
+-    def _instrument_min_order_usdt(self, symbol: str, ask: Decimal) -> Decimal:
+-        try:
+-            inst = self._call_tool(
+-                "market_get_instruments", {"instType": "SPOT", "instId": symbol}
+-            )
+-            row = (inst.get("data") or {}).get("data") or []
+-            if not row:
+-                return self.min_order_usdt
+-            spec = row[0]
+-            min_sz = Decimal(str(spec.get("minSz") or "0"))
+-            lot_sz_raw = spec.get("lotSz")
+-            lot_sz = Decimal(str(lot_sz_raw)) if lot_sz_raw else None
+-            if min_sz <= 0:
+-                return self.min_order_usdt
+-            return min_notional_usdt(ask, min_sz, lot_sz_base=lot_sz)
+-        except Exception:
+-            return self.min_order_usdt
++    def _instrument_min_order_usdt(self, symbol: str, ask: Decimal, *, timeout_seconds: float) -> Decimal:
++        inst = self._call_tool(
++            "market_get_instruments", {"instType": "SPOT", "instId": symbol},
++            timeout_seconds=timeout_seconds,
++        )
++        rows = (inst.get("data") or {}).get("data") or []
++        if not rows or rows[0].get("instId", symbol) != symbol:
++            raise RuntimeError("instrument minimum unavailable or mismatched")
++        spec = rows[0]
++        min_sz = Decimal(str(spec.get("minSz") or "0"))
++        lot_sz = Decimal(str(spec.get("lotSz") or "0"))
++        if not min_sz.is_finite() or not lot_sz.is_finite() or min_sz <= 0 or lot_sz <= 0:
++            raise RuntimeError("invalid instrument minimum; no assumed fallback")
++        return min_notional_usdt(ask, min_sz, lot_sz_base=lot_sz)
+ 
+     def fetch_snapshot(self, symbol: str) -> MarketSnapshot:
+-        data = self._call_tool("market_get_ticker", {"instId": symbol})
++        deadline = time.monotonic() + self.timeout_seconds
++        data = self._call_tool("market_get_ticker", {"instId": symbol},
++                               timeout_seconds=deadline - time.monotonic())
+         row = (data.get("data") or {}).get("data") or []
+         if not row:
+             raise RuntimeError("ticker missing data")
+         tick = row[0]
+-        fetched_at = int(time.time())
++        if tick.get("instId", symbol) != symbol:
++            raise RuntimeError("ticker symbol mismatch")
+         raw_ts = int(tick.get("ts") or 0)
+-        if raw_ts > 10_000_000_000:
+-            tick_at = int(raw_ts / 1000)
+-        elif raw_ts > 1_000_000_000:
+-            tick_at = raw_ts
+-        else:
+-            tick_at = fetched_at
+-        captured_at = tick_at if abs(fetched_at - tick_at) <= 10 else fetched_at
++        if raw_ts <= 0:
++            raise RuntimeError("ticker timestamp missing; no fresh-time fallback")
++        captured_at = raw_ts // 1000 if raw_ts > 10_000_000_000 else raw_ts
+         ask = Decimal(str(tick["askPx"]))
+-        min_order = self._instrument_min_order_usdt(symbol, ask)
++        bid = Decimal(str(tick["bidPx"]))
++        if not ask.is_finite() or not bid.is_finite() or not 0 < bid <= ask:
++            raise RuntimeError("invalid ticker prices")
++        min_order = self._instrument_min_order_usdt(
++            symbol, ask, timeout_seconds=deadline - time.monotonic()
++        )
++        if time.monotonic() > deadline:
++            raise TimeoutError("OKX ATK snapshot deadline exceeded")
+         return MarketSnapshot(
+             symbol=symbol,
+-            bid=Decimal(str(tick["bidPx"])),
++            bid=bid,
+             ask=ask,
+             captured_at=captured_at,
+             source="ATK_LIVE_MARKET",
+diff --git a/chain/anchor_job.py b/chain/anchor_job.py
+index c7bc280..8a3275b 100644
+--- a/chain/anchor_job.py
++++ b/chain/anchor_job.py
+@@ -14,7 +14,7 @@ from pathlib import Path
+ def _decision_digest(conn: sqlite3.Connection, limit: int) -> str:
+     rows = conn.execute(
+         """
+-        SELECT id, symbol, status, rule, market_source, created_at
++        SELECT *
+         FROM decisions ORDER BY id DESC LIMIT ?
+         """,
+         (limit,),
+@@ -23,34 +23,42 @@ def _decision_digest(conn: sqlite3.Connection, limit: int) -> str:
+     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+ 
+ 
+-def main() -> None:
+-    parser = argparse.ArgumentParser(description="Gölge Defter anchor manifest")
+-    parser.add_argument("--db", default="data/golge.db")
+-    parser.add_argument("--out", default="evidence/anchor_manifest.json")
+-    parser.add_argument("--limit", type=int, default=200)
+-    parser.add_argument("--label", default="golge_batch")
+-    args = parser.parse_args()
+-
+-    db_path = Path(args.db)
+-    conn = sqlite3.connect(db_path)
++def build_manifest(db_path: Path, limit: int = 200, label: str = "golge_batch") -> dict:
++    if limit <= 0:
++        raise ValueError("batch limit must be positive")
++    conn = sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+     try:
+-        digest = _decision_digest(conn, args.limit)
+-        count = conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
++        conn.execute("BEGIN")
++        digest = _decision_digest(conn, limit)
++        total = conn.execute("SELECT COUNT(*) FROM decisions").fetchone()[0]
+     finally:
+         conn.close()
+-
+-    manifest = {
+-        "label": args.label,
++    return {
++        "label": label,
+         "db": str(db_path.resolve()),
+-        "decision_count": count,
+-        "batch_limit": args.limit,
++        "decision_count": min(total, limit),
++        "total_decision_count": total,
++        "batch_limit": limit,
+         "sha256": digest,
+         "generated_at": datetime.now(timezone.utc).isoformat(),
+         "fuji_contract": os.environ.get("FUJI_ANCHOR_CONTRACT", ""),
+         "snowtrace_tx": os.environ.get("FUJI_LAST_TX", ""),
+-        "note": "Set FUJI_* env after on-chain anchor; worker DB is read-only here.",
++        "proof_kind": "LOCAL_SHA256",
++        "blockchain_verified": False,
++        "note": "Local decision-batch SHA-256 only. Any supplied chain URL is unverified; no receipt/hash verification is implemented.",
+     }
+ 
++
++def main() -> None:
++    parser = argparse.ArgumentParser(description="Gölge Defter anchor manifest")
++    parser.add_argument("--db", default="data/golge.db")
++    parser.add_argument("--out", default="evidence/anchor_manifest.json")
++    parser.add_argument("--limit", type=int, default=200)
++    parser.add_argument("--label", default="golge_batch")
++    args = parser.parse_args()
++
++    manifest = build_manifest(Path(args.db), args.limit, args.label)
++
+     out = Path(args.out)
+     out.parent.mkdir(parents=True, exist_ok=True)
+     out.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+diff --git a/contracts/models.py b/contracts/models.py
+index fc5b11a..bee5eb5 100644
+--- a/contracts/models.py
++++ b/contracts/models.py
+@@ -38,7 +38,7 @@ class ConstitutionRules:
+     pair_cooldown_seconds: int = 15 * 60
+     observation_min_balance_usdt: Decimal = D("40")
+     max_data_age_seconds: int = 10
+-    rules_version: str = "rules_v2"
++    rules_version: str = "rules_v2_audit1"
+ 
+ 
+ @dataclass(frozen=True)
+@@ -50,6 +50,20 @@ class MarketSnapshot:
+     source: DataSource = "MOCK"
+     min_order_usdt: Decimal = D("10")
+ 
++    def is_usable(self, now: int, max_age_seconds: int = 10) -> bool:
++        """All state-changing consumers reject stale, future and invalid prices."""
++        return (
++            isinstance(now, int) and isinstance(self.captured_at, int)
++            and 0 <= now - self.captured_at <= max_age_seconds
++            and self.bid.is_finite() and self.ask.is_finite()
++            and 0 < self.bid <= self.ask
++        )
++
++
++def compatible_sources(source: str) -> tuple[str, ...]:
++    # Historical ATK alias is the same live feed family. Never mix MOCK/FIXTURE.
++    return ("ATK", "ATK_LIVE_MARKET") if source in ("ATK", "ATK_LIVE_MARKET") else (source,)
++
+ 
+ @dataclass(frozen=True)
+ class AnalystSignal:
+diff --git a/core/analyst.py b/core/analyst.py
+index 3a7122d..0900af2 100644
+--- a/core/analyst.py
++++ b/core/analyst.py
+@@ -2,12 +2,15 @@
+ from __future__ import annotations
+ 
+ import json
++from decimal import Decimal
+ from typing import Any
+ 
+ from contracts.models import AnalystSignal, MarketSnapshot
+ 
+ 
+ def validate_analyst_payload(payload: dict[str, Any]) -> AnalystSignal:
++    if not isinstance(payload, dict) or set(payload) != {"symbol", "action", "reason"}:
++        raise ValueError("only symbol, action and reason are permitted")
+     symbol = str(payload.get("symbol", "")).strip()
+     action = str(payload.get("action", "")).strip().upper()
+     reason = str(payload.get("reason", "")).strip()
+@@ -21,7 +24,7 @@ def validate_analyst_payload(payload: dict[str, Any]) -> AnalystSignal:
+ def demo_signal(market: MarketSnapshot) -> AnalystSignal:
+     """Explicitly labeled demo signal for MVP when no LLM credentials are configured."""
+     spread = (market.ask - market.bid) / market.ask
+-    if spread <= 0.0015:
++    if spread <= Decimal("0.0015"):
+         return AnalystSignal(
+             symbol=market.symbol,
+             action="BUY",
+@@ -55,8 +58,10 @@ def llm_signal(market: MarketSnapshot) -> AnalystSignal:
+             origin="LLM",
+         )
+     prompt = (
+-        "Yalnızca JSON döndür: "
+-        '{"symbol":"' + market.symbol + '","action":"BUY veya PASS","reason":"tek cümle"}'
++        "Piyasa: " + json.dumps({"symbol": market.symbol, "bid": str(market.bid),
++            "ask": str(market.ask), "captured_at": market.captured_at, "source": market.source})
++        + '\nYalnızca JSON döndür: {"symbol":"' + market.symbol
++        + '","action":"BUY veya PASS","reason":"tek cümle"}'
+     )
+     api_url = os.environ.get(
+         "GOLGE_LLM_API_URL",
+@@ -90,8 +95,11 @@ def llm_signal(market: MarketSnapshot) -> AnalystSignal:
+         text = payload["choices"][0]["message"]["content"].strip()
+         if text.startswith("```"):
+             text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+-        return parse_analyst_json(text)
+-    except (urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError):
++        signal = parse_analyst_json(text)
++        if signal.symbol != market.symbol:
++            raise ValueError("analyst symbol differs from market")
++        return signal
++    except (urllib.error.URLError, TimeoutError, KeyError, IndexError, TypeError, AttributeError, ValueError, json.JSONDecodeError):
+         return AnalystSignal(
+             symbol=market.symbol,
+             action="PASS",
+diff --git a/core/constitution.py b/core/constitution.py
+index 06e08d7..9b7e132 100644
+--- a/core/constitution.py
++++ b/core/constitution.py
+@@ -28,7 +28,8 @@ def _number(value: Decimal, name: str) -> Decimal:
+ def _daily_loss_limit(constitution: ConstitutionRules, day_start_balance_usdt: Decimal | None) -> Decimal:
+     if day_start_balance_usdt is not None:
+         base = _number(day_start_balance_usdt, "day_start_balance_usdt")
+-        return base * constitution.max_daily_realized_loss_fraction
++        return min(base * constitution.max_daily_realized_loss_fraction,
++                   constitution.max_daily_realized_loss_usdt)
+     return _number(constitution.max_daily_realized_loss_usdt, "max_daily_realized_loss_usdt")
+ 
+ 
+@@ -103,17 +104,7 @@ def evaluate(
+         raise ValueError("open_position_count must be nonnegative")
+ 
+     amount = balance * constitution.max_position_fraction
+-    nil = DecisionResult(
+-        "NO_DECISION",
+-        "DATA",
+-        "Güvenilir piyasa verisi olmadan karar verilmedi.",
+-        amount,
+-        None,
+-        None,
+-    )
+-    if not isinstance(now, int) or not isinstance(market.captured_at, int):
+-        return nil
+-    if market.captured_at > now or now - market.captured_at > constitution.max_data_age_seconds:
++    if not market.is_usable(now, constitution.max_data_age_seconds):
+         return DecisionResult(
+             "NO_DECISION",
+             "DATA",
+@@ -146,6 +137,15 @@ def evaluate(
+             None,
+         )
+ 
++    # Executability precedes risk/PASS classification: an impossible order is
++    # never an eligible risk opportunity, even when other vetoes also apply.
++    if amount < minimum:
++        return DecisionResult(
++            "TECHNICAL_BLOCK", "MIN_ORDER",
++            "Anayasal tutar borsa minimum emrinin altında; teknik kayıt.",
++            amount, spread, ShadowCategory.TECHNICAL_UNEXECUTABLE,
++        )
++
+     if signal.action == "PASS":
+         return DecisionResult(
+             "SHADOW_PASS",
+@@ -189,16 +189,6 @@ def evaluate(
+                 ShadowCategory.CONSTITUTIONAL_RISK_BLOCK,
+             )
+ 
+-    if balance < constitution.observation_min_balance_usdt and amount < minimum:
+-        return DecisionResult(
+-            "SHADOW_RISK",
+-            "OBSERVATION",
+-            "Bakiye gözlem eşiğinde; %25 tavan minimum emri karşılamıyor.",
+-            amount,
+-            spread,
+-            ShadowCategory.CONSTITUTIONAL_RISK_BLOCK,
+-        )
+-
+     if open_position_count >= constitution.max_open_positions:
+         return DecisionResult(
+             "SHADOW_RISK",
+@@ -230,16 +220,6 @@ def evaluate(
+             ShadowCategory.CONSTITUTIONAL_RISK_BLOCK,
+         )
+ 
+-    if amount < minimum:
+-        return DecisionResult(
+-            "TECHNICAL_BLOCK",
+-            "MIN_ORDER",
+-            "Anayasal tutar borsa minimum emrinin altında.",
+-            amount,
+-            spread,
+-            ShadowCategory.TECHNICAL_UNEXECUTABLE,
+-        )
+-
+     return DecisionResult(
+         "APPROVED_PAPER",
+         "OK",
+diff --git a/core/decision_engine.py b/core/decision_engine.py
+index 2a2845c..f1513bb 100644
+--- a/core/decision_engine.py
++++ b/core/decision_engine.py
+@@ -21,7 +21,7 @@ def run_decision_cycle(
+     market: MarketSnapshot,
+     now: int | None = None,
+ ) -> tuple[DecisionResult, int | None]:
+-    now = int(now or time.time())
++    now = int(time.time()) if now is None else now
+     day = utc_day(now)
+     daily_loss = db.get_daily_loss(day)
+     day_start_balance = db.get_day_start_balance(day)
+@@ -41,6 +41,11 @@ def run_decision_cycle(
+         last_pair_close_at=last_close,
+         day_start_balance_usdt=day_start_balance,
+     )
++    if signal.origin == "LLM" and signal.reason.startswith("LLM_FAIL_CLOSED:"):
++        decision = DecisionResult(
++            "NO_DECISION", "SIGNAL", signal.reason,
++            decision.notional_usdt, decision.spread_fraction, None,
++        )
+     ref_id: int | None = None
+     if decision.shadow_category is not None:
+         ref_id = db.insert_shadow(
+diff --git a/core/paper_broker.py b/core/paper_broker.py
+index 5ddc95b..e35b016 100644
+--- a/core/paper_broker.py
++++ b/core/paper_broker.py
+@@ -14,6 +14,8 @@ def open_paper_position(
+     rules: ConstitutionRules,
+     now: int,
+ ) -> Position:
++    if not market.is_usable(now, rules.max_data_age_seconds):
++        raise ValueError("unusable market data; PAPER open rejected")
+     entry = market.ask
+     qty = notional_usdt / entry
+     fee = notional_usdt * DEFAULT_FEE_RATE
+@@ -25,10 +27,10 @@ def open_paper_position(
+         cur = conn.execute(
+             """
+             INSERT INTO positions
+-            (symbol, entry_price, notional_usdt, quantity, stop_loss_price, opened_at, status, mode)
+-            VALUES (?, ?, ?, ?, ?, ?, 'OPEN', 'PAPER')
++            (symbol, entry_price, notional_usdt, quantity, stop_loss_price, opened_at, status, mode, market_source)
++            VALUES (?, ?, ?, ?, ?, ?, 'OPEN', 'PAPER', ?)
+             """,
+-            (market.symbol, str(entry), str(notional_usdt), str(qty), str(stop), now),
++            (market.symbol, str(entry), str(notional_usdt), str(qty), str(stop), now, market.source),
+         )
+         pos_id = int(cur.lastrowid)
+         conn.execute(
+diff --git a/core/position_monitor.py b/core/position_monitor.py
+index c038021..6757c4a 100644
+--- a/core/position_monitor.py
++++ b/core/position_monitor.py
+@@ -1,17 +1,21 @@
+ from decimal import Decimal
+ 
+-from contracts.models import MarketSnapshot
++from contracts.models import MarketSnapshot, compatible_sources
+ from storage.database import Database
+ 
+ FEE_RATE = Decimal("0.001")
+ 
+ 
+ def monitor_open_positions(db: Database, market: MarketSnapshot, now: int, utc_day: str) -> list[int]:
++    if not market.is_usable(now):
++        return []
++    sources = compatible_sources(market.source)
++    placeholders = ",".join("?" for _ in sources)
+     closed: list[int] = []
+     with db.session() as conn:
+         rows = conn.execute(
+-            "SELECT * FROM positions WHERE status = 'OPEN' AND symbol = ?",
+-            (market.symbol,),
++            f"SELECT * FROM positions WHERE status = 'OPEN' AND symbol = ? AND market_source IN ({placeholders})",
++            (market.symbol, *sources),
+         ).fetchall()
+         for row in rows:
+             stop = Decimal(str(row["stop_loss_price"]))
+@@ -23,15 +27,15 @@ def monitor_open_positions(db: Database, market: MarketSnapshot, now: int, utc_d
+             exit_price = market.bid
+             proceeds = qty * exit_price
+             fee = proceeds * FEE_RATE
+-            pnl = proceeds - fee - notional
+-            conn.execute(
++            pnl = proceeds - fee - notional - notional * FEE_RATE
++            cur = conn.execute(
+                 """
+                 UPDATE positions SET status='CLOSED', closed_at=?, close_reason='STOP_LOSS'
+                 WHERE id=? AND status='OPEN'
+                 """,
+                 (now, row["id"]),
+             )
+-            if conn.total_changes == 0:
++            if cur.rowcount == 0:
+                 continue
+             bal_row = conn.execute("SELECT balance_usdt FROM paper_state WHERE id=1").fetchone()
+             balance = Decimal(str(bal_row["balance_usdt"])) + proceeds - fee
+diff --git a/core/shadow_evaluator.py b/core/shadow_evaluator.py
+index 13c11ba..1ee5338 100644
+--- a/core/shadow_evaluator.py
++++ b/core/shadow_evaluator.py
+@@ -1,6 +1,6 @@
+ from decimal import Decimal
+ 
+-from contracts.models import MarketSnapshot
++from contracts.models import MarketSnapshot, compatible_sources
+ from storage.database import Database
+ 
+ DEFAULT_FEE_RATE = Decimal("0.001")
+@@ -15,28 +15,35 @@ def shadow_pnl(entry_ask: Decimal, exit_bid: Decimal, notional: Decimal) -> Deci
+ 
+ 
+ def evaluate_due_shadows(db: Database, market: MarketSnapshot, now: int) -> int:
++    if not market.is_usable(now):
++        return 0
++    sources = compatible_sources(market.source)
++    placeholders = ",".join("?" for _ in sources)
+     updated = 0
+     with db.session() as conn:
+         rows = conn.execute(
+-            """
++            f"""
+             SELECT st.id, st.entry_ask, st.notional_usdt, st.created_at,
+                    st.target_15_at, st.target_60_at,
+                    se.horizon_minutes, se.status
+             FROM shadow_trades st
+             JOIN shadow_evaluations se ON se.shadow_id = st.id
+             WHERE st.symbol = ? AND se.status = 'PENDING'
++              AND st.source IN ({placeholders})
+             """,
+-            (market.symbol,),
++            (market.symbol, *sources),
+         ).fetchall()
+         for row in rows:
+             horizon = int(row["horizon_minutes"])
+             due_at = int(row["target_15_at"] if horizon == 15 else row["target_60_at"])
+-            if now < due_at:
++            if now < due_at or market.captured_at < due_at:
+                 continue
+             entry = Decimal(str(row["entry_ask"]))
+             notional = Decimal(str(row["notional_usdt"]))
+             pnl = shadow_pnl(entry, market.bid, notional)
+-            note = "LATE_EVALUATION" if now > due_at + 120 else ""
++            note = "stop_dogrulamasi_sinirli"
++            if now > due_at + 120:
++                note += ";LATE_EVALUATION"
+             cur = conn.execute(
+                 """
+                 UPDATE shadow_evaluations
+diff --git a/dashboard/app.py b/dashboard/app.py
+index 6c7d7a8..0a9fe04 100644
+--- a/dashboard/app.py
++++ b/dashboard/app.py
+@@ -40,8 +40,9 @@ if st.sidebar.button("Döngüyü çalıştır"):
+         st.stop()
+     signal = demo_signal(market)
+     now = int(time.time())
+-    decision, ref_id = run_decision_cycle(db, rules=rules, signal=signal, market=market, now=now)
++    db.get_day_start_balance(utc_day(now))
+     monitor_open_positions(db, market, now, utc_day(now))
++    decision, ref_id = run_decision_cycle(db, rules=rules, signal=signal, market=market, now=now)
+     evaluate_due_shadows(db, market, now)
+     st.session_state["last"] = (market, signal, decision, ref_id, now)
+ 
+diff --git a/dashboard/kokpit/app.js b/dashboard/kokpit/app.js
+index 75a0be9..1f24158 100644
+--- a/dashboard/kokpit/app.js
++++ b/dashboard/kokpit/app.js
+@@ -24,6 +24,27 @@ function esc(s) {
+     .replace(/"/g, "&quot;");
+ }
+ 
++// Display-only rounding uses integer arithmetic; stored Decimal values stay intact.
++function fmtUsdt(value, places = 6) {
++  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:[eE]([+-]?\d+))?$/.exec(String(value ?? ""));
++  if (!match) return "—";
++  const exponent = Number(match[4] || 0);
++  if (Math.abs(exponent) > 1000) return "—";
++  const digits = match[2] + (match[3] || "");
++  const point = match[2].length + exponent;
++  const integer = point <= 0 ? "0" : digits.slice(0, point).padEnd(point, "0");
++  const fraction = point < 0 ? "0".repeat(-point) + digits : digits.slice(Math.max(0, point));
++  const padded = fraction.padEnd(places + 1, "0");
++  let scaled = BigInt(integer + padded.slice(0, places));
++  if (padded[places] >= "5") scaled += 1n;
++  const nonzero = /[1-9]/.test(digits);
++  const sign = match[1] === "-" && nonzero ? "−" : "";
++  if (scaled === 0n && nonzero) return `${sign}<0,${"0".repeat(places - 1)}1`;
++  const result = scaled.toString().padStart(places + 1, "0");
++  const whole = result.slice(0, -places).replace(/\B(?=(\d{3})+(?!\d))/g, ".");
++  return `${sign}${whole},${result.slice(-places)}`;
++}
++
+ function fmtTs(epoch) {
+   if (!epoch) return "—";
+   try {
+@@ -42,11 +63,11 @@ function kvHtml(rows) {
+ function renderMetrics(snap) {
+   const r = snap.report || {};
+   const items = [
+-    ["15 dk · canlı veri gözlemi", r.complete_15m_live_feed ?? "—"],
+-    ["60 dk · canlı veri gözlemi", r.complete_60m_live_feed ?? "—"],
++    ["15 dk · ATK kökenli gözlem", r.complete_15m_live_feed ?? "—"],
++    ["60 dk · ATK kökenli gözlem", r.complete_60m_live_feed ?? "—"],
+     ["Risk nedeniyle engellenen", r.decisions_shadow_risk ?? 0],
+     ["Teknik blok", r.decisions_technical_block ?? 0],
+-    ["PAPER bakiye", `${snap.paper_balance_usdt ?? "—"} USDT`],
++    ["PAPER bakiye", `${fmtUsdt(snap.paper_balance_usdt, 2)} USDT`],
+   ];
+   document.getElementById("metric-strip").innerHTML = items
+     .map(
+@@ -76,6 +97,7 @@ function renderSystem(snap) {
+   document.getElementById("system-body").innerHTML = kvHtml([
+     ["Son piyasa kaynağı", snap.last_market_source || "—"],
+     ["Son karar yaşı", age],
++    ["Sinyal kökenleri", Object.entries(snap.report?.decisions_by_signal_origin || {}).map(([k,v]) => `${k}: ${v}`).join(" · ") || "—"],
+     ["Bekleyen değerlendirme", snap.report?.pending_evaluations ?? "—"],
+     ["Açık PAPER pozisyon", (snap.open_positions || []).length],
+   ]);
+@@ -92,9 +114,9 @@ function renderConstitution(snap) {
+     ["Max toplam risk", `%${c.max_toplam_risk_pct}`],
+     ["Makas tavanı", `%${c.max_spread_pct}`],
+     ["Stop", `%${c.stop_loss_pct}`],
+-    ["Günlük zarar", `%${c.gunluk_zarar_pct}`],
++    ["Günlük zarar", `En fazla ${c.gunluk_zarar_usdt} USDT ve gün başı %${c.gunluk_zarar_pct}`],
+     ["Bekleme", `${c.bekleme_dk} dk / parite`],
+-    ["Gözlem eşiği", `${c.gozlem_esigi_usdt} USDT`],
++    ["Minimum emir", "Veri adaptöründen · teknik kayıt"],
+     ["Açık pozisyonlar", pos || "—"],
+   ]);
+ }
+@@ -102,7 +124,8 @@ function renderConstitution(snap) {
+ const STATUS_LABELS = {
+   APPROVED_PAPER: "PAPER onayı", SHADOW_RISK: "Risk engeli",
+   SHADOW_PASS: "Pas gözlemi", TECHNICAL_BLOCK: "Teknik engel",
+-  NO_DECISION: "Karar yok", COMPLETE: "Tamamlandı", PENDING: "Bekliyor",
++  NO_DECISION: "Karar yok", CONSTITUTIONAL_RISK_BLOCK: "Anayasal risk",
++  PASS_OBSERVATION: "Pas gözlemi", TECHNICAL_UNEXECUTABLE: "Teknik kayıt", COMPLETE: "Tamamlandı", PENDING: "Bekliyor",
+ };
+ 
+ function statusHtml(status) {
+@@ -121,7 +144,7 @@ function tableHtml(caption, headers, rows, empty) {
+ 
+ function renderShadow(snap) {
+   const eb = snap.eval_breakdown || {};
+-  const summary = `<div class="observation-summary">${[15, 60].map((minutes) =>
++  const summary = `<p class="hint">Tüm kategoriler dahildir. Teknik kayıtlar risk koruması sayılmaz.</p><div class="observation-summary">${[15, 60].map((minutes) =>
+     `<span><strong>${minutes} dk</strong> ${esc(eb[minutes]?.COMPLETE ?? 0)} tamamlandı <span class="summary-divider">/</span> ${esc(eb[minutes]?.PENDING ?? 0)} bekliyor</span>`
+   ).join("")}</div>`;
+   const rows = (snap.recent_shadow || []).map((row) => `<tr>
+@@ -130,11 +153,12 @@ function renderShadow(snap) {
+     <td class="nowrap">${esc(row.horizon_minutes)} dk</td>
+     <td>${statusHtml(row.status)}</td>
+     <td>${statusHtml(row.category)}</td>
+-    <td class="numeric">${row.pnl_usdt != null ? `${esc(row.pnl_usdt)}<small>USDT · karşı-olgusal</small>` : "—"}</td>
+-    <td class="cell-source">${esc(row.feed_source || "Veri bekleniyor")}</td>
++    <td class="numeric">${row.pnl_usdt != null ? `<span title="Ham değer: ${esc(row.pnl_usdt)}">${esc(fmtUsdt(row.pnl_usdt))}</span><small>USDT · karşı-olgusal</small>` : "—"}</td>
++    <td class="cell-source">Giriş: ${esc(row.entry_source || "—")}<small>Çıkış: ${esc(row.feed_source || "Bekleniyor")}<br>Sinyal: ${esc(row.signal_origin || "UNKNOWN")}</small></td>
++    <td class="cell-time">Hedef: ${esc(fmtTs(row.target_at))}<small>Ölçüm: ${esc(fmtTs(row.evaluated_at))}<br>${esc(row.note || (row.status === "COMPLETE" ? "Eski kayıt: stop doğrulaması belgelenmedi" : "Ölçüm bekleniyor"))}</small></td>
+   </tr>`).join("");
+   document.getElementById("shadow-body").innerHTML = summary + tableHtml(
+-    "Gölge gözlem kayıtları", ["Kayıt", "Parite", "Pencere", "Gözlem durumu", "Karar sınıfı", "Net sonuç", "Veri kaynağı"],
++    "Gölge gözlem kayıtları", ["Kayıt", "Parite", "Pencere", "Gözlem durumu", "Karar sınıfı", "Net sonuç", "Veri / sinyal kökeni", "Ölçüm / sınırlamalar"],
+     rows, "Henüz gölge kaydı yok. Engellenen veya pas geçilen adaylar burada izlenir."
+   );
+ }
+@@ -166,10 +190,11 @@ function renderChain(snap) {
+       '<p class="hint">Henüz zincir kanıtı üretilmedi. Bir kayıt sabitlendiğinde hash ve doğrulama bilgisi burada görünecek.</p>';
+     return;
+   }
+-  const tx = a.snowtrace_tx ? "Fuji işlem kaydı mevcut" : "Yerel hash · Fuji işlemi bekleniyor";
++  const tx = "Doğrulanmış blockchain kanıtı yok";
+   document.getElementById("chain-body").innerHTML = kvHtml([
+-    ["sha256", (a.sha256 || "").slice(0, 16) + "…"],
+-    ["Karar sayısı", a.decision_count],
++    ["Yerel SHA-256", a.sha256 || "—"],
++    ["Manifest kayıt sayısı", a.decision_count],
++    ["Hash kapsamı", `Son en fazla ${a.batch_limit ?? "—"} karar · eski manifestlerde kayıt sayısı farklı olabilir`],
+     ["Üretim", a.generated_at],
+     ["Zincir", tx],
+   ]);
+@@ -181,7 +206,7 @@ function renderChain(snap) {
+         link.href = url.href;
+         link.target = "_blank";
+         link.rel = "noopener noreferrer";
+-        link.textContent = "İşlemi Snowtrace üzerinde doğrula ↗";
++        link.textContent = "Bildirilen işlem bağlantısı (doğrulanmadı) ↗";
+         document.getElementById("chain-body").append(link);
+       }
+     } catch { /* A malformed proof URL must not interrupt the dashboard. */ }
+diff --git a/dashboard/kokpit/index.html b/dashboard/kokpit/index.html
+index a0e7b23..ac7801b 100644
+--- a/dashboard/kokpit/index.html
++++ b/dashboard/kokpit/index.html
+@@ -33,7 +33,7 @@
+   <div class="section-heading"><div><span class="eyebrow">Karar laboratuvarı</span><h2>Kurallar sözde kalmasın.</h2></div><span class="section-note">Salt okunur kokpit · 20 sn yenileme</span></div>
+   <div class="grid">
+     <article class="panel simulation" id="panel-sim"><div class="panel-heading"><span class="index">01 / DENE</span><h2>Anayasaya meydan oku</h2></div><p class="hint">Bir talep yaz. Sistem, değiştirilemeyen sınırları nasıl koruduğunu göstersin.</p><form id="sim-form" class="sim-form"><label for="sim-input">Yatırım talebin</label><div class="input-row"><input id="sim-input" type="text" value="Bakiyemin %80'i ile al" autocomplete="off" required /><button type="submit">Test et ↗</button></div></form><div class="presets" aria-label="Örnek talepler"><button type="button" data-prompt="Bakiyemin %80'i ile al">%80 ile al</button><button type="button" data-prompt="Bakiyemin %10'u ile al">Tavanı %10 yap</button></div><div id="sim-result" class="sim-result" role="status">Sonuç burada görünecek. Bu deneme veritabanına yazılmaz.</div><div class="simulation-foot">MOCK / SIMULATED <span>Yetki kullanıcıda. Sınır anayasada.</span></div></article>
+-    <article class="panel" id="panel-constitution"><div class="panel-heading"><span class="index">02 / DENETLE</span><h2>Yatırım Anayasası</h2></div><p class="hint">Kurallar yalnızca sıkılaştırılabilir.</p><div class="panel-body" id="constitution-body"></div></article>
++    <article class="panel" id="panel-constitution"><div class="panel-heading"><span class="index">02 / DENETLE</span><h2>Yatırım Anayasası</h2></div><p class="hint">Kod varsayılanları gösterilir. Kullanıcı sıkılaştırmaları bu özetin kapsamında değildir; kurallar yalnızca sıkılaştırılabilir.</p><div class="panel-body" id="constitution-body"></div></article>
+     <article class="panel" id="panel-analyst"><div class="panel-heading"><span class="index">03 / İNCELE</span><h2>Karar akışı</h2></div><div class="chips" id="decision-chips"></div><div class="panel-body" id="decisions-body"><p class="hint">Kararlar yükleniyor…</p></div></article>
+     <article class="panel" id="panel-shadow"><div class="panel-heading"><span class="index">04 / TAKİP ET</span><h2>Gölge Defter</h2></div><p class="hint">İşleme dönüşmeyen adaylara 15 ve 60 dakika sonra yeniden bakılır. Karşı-olgusal sonuçlar kesin önlenen zarar değildir.</p><div class="panel-body" id="shadow-body"></div></article>
+     <article class="panel utility" id="panel-system"><div class="panel-heading"><span class="index">SİSTEM</span><h2>Veri & bağlantı</h2></div><div class="panel-body" id="system-body"></div></article>
+diff --git a/dashboard/snapshot.py b/dashboard/snapshot.py
+index 5e7f2b2..67a954f 100644
+--- a/dashboard/snapshot.py
++++ b/dashboard/snapshot.py
+@@ -41,7 +41,11 @@ def _load_anchor_manifest() -> dict | None:
+     if not path.is_file():
+         return None
+     try:
+-        return json.loads(path.read_text(encoding="utf-8"))
++        data = json.loads(path.read_text(encoding="utf-8"))
++        if not isinstance(data, dict):
++            return None
++        # A manifest / explorer URL alone cannot verify a chain receipt or hash.
++        return {**data, "blockchain_verified": False, "proof_kind": "LOCAL_SHA256"}
+     except json.JSONDecodeError:
+         return None
+ 
+@@ -60,11 +64,12 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
+         raise FileNotFoundError(f"DB bulunamadı: {path}")
+ 
+     rules = ConstitutionRules()
+-    report = build_report(path)
+ 
+     conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+     conn.row_factory = sqlite3.Row
+     try:
++        conn.execute("BEGIN")
++        report = build_report(path, connection=conn)
+         bal = conn.execute("SELECT balance_usdt FROM paper_state WHERE id=1").fetchone()
+         paper_balance = str(bal[0]) if bal else None
+ 
+@@ -85,8 +90,16 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
+ 
+         recent_shadow = conn.execute(
+             """
+-            SELECT st.id AS shadow_id, st.symbol, st.category, se.horizon_minutes,
+-                   se.status, se.pnl_usdt, se.feed_source, se.evaluated_at, st.created_at
++            SELECT st.id AS shadow_id, st.symbol, st.category AS raw_category,
++                   CASE WHEN st.constitution_rule IN ('OBSERVATION','MIN_ORDER')
++                        THEN 'TECHNICAL_UNEXECUTABLE' ELSE st.category END AS category,
++                   se.horizon_minutes, se.status, se.pnl_usdt, se.feed_source,
++                   se.evaluated_at, st.created_at, st.source AS entry_source,
++                   CASE WHEN se.horizon_minutes=15 THEN st.target_15_at ELSE st.target_60_at END AS target_at,
++                   se.note,
++                   COALESCE((SELECT GROUP_CONCAT(DISTINCT d.signal_origin) FROM decisions d
++                       WHERE d.ref_id=st.id AND d.status IN ('SHADOW_RISK','SHADOW_PASS','TECHNICAL_BLOCK')
++                         AND d.symbol=st.symbol), 'UNKNOWN') AS signal_origin
+             FROM shadow_evaluations se
+             JOIN shadow_trades st ON st.id = se.shadow_id
+             ORDER BY COALESCE(se.evaluated_at, 0) DESC, st.id DESC, se.horizon_minutes DESC
+@@ -94,13 +107,11 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
+             """
+         ).fetchall()
+ 
+-        decisions_by_status = conn.execute(
+-            "SELECT status, COUNT(*) AS c FROM decisions GROUP BY status ORDER BY c DESC"
+-        ).fetchall()
+-
+         recent_decisions = conn.execute(
+             """
+-            SELECT id, symbol, signal_origin, signal_action, status, rule,
++            SELECT id, symbol, signal_origin, signal_action, status AS raw_status,
++                   CASE WHEN status='SHADOW_RISK' AND rule IN ('OBSERVATION','MIN_ORDER')
++                        THEN 'TECHNICAL_BLOCK' ELSE status END AS status, rule,
+                    market_source, explanation, created_at, rules_version
+             FROM decisions ORDER BY id DESC LIMIT 15
+             """
+@@ -139,6 +150,7 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
+         "max_spread_pct": float(rules.max_spread_fraction * 100),
+         "stop_loss_pct": float(rules.stop_loss_fraction * 100),
+         "gunluk_zarar_pct": float(rules.max_daily_realized_loss_fraction * 100),
++        "gunluk_zarar_usdt": str(rules.max_daily_realized_loss_usdt),
+         "bekleme_dk": rules.pair_cooldown_seconds // 60,
+         "gozlem_esigi_usdt": str(rules.observation_min_balance_usdt),
+         "rules_version_code": rules.rules_version,
+@@ -156,7 +168,7 @@ def build_kokpit_snapshot(db_path: str | Path | None = None) -> dict:
+         "paper_balance_usdt": paper_balance,
+         "open_positions": [_row_dict(r) for r in open_positions],
+         "eval_breakdown": eval_breakdown,
+-        "decisions_summary": {r["status"]: int(r["c"]) for r in decisions_by_status},
++        "decisions_summary": report["decisions_by_status"],
+         "recent_shadow": [_row_dict(r) for r in recent_shadow],
+         "recent_decisions": [_row_dict(r) for r in recent_decisions],
+         "anchor": _load_anchor_manifest(),
+diff --git a/docs/spec-decisions.md b/docs/spec-decisions.md
+index a9fb4a8..5567b3f 100644
+--- a/docs/spec-decisions.md
++++ b/docs/spec-decisions.md
+@@ -12,8 +12,17 @@
+ 
+ 1. **MVP modu:** Yalnızca PAPER; LIVE istekleri `LIVE_REJECTED`.
+ 2. **Analist:** Varsayılan `demo_signal` (`origin=DEMO`); gerçek LLM entegrasyonu modüler (`core/analyst.py`).
+-3. **ATK:** OKX MCP `market_get_ticker` stdio; başarısızlıkta UI mock'a düşer, karar motoru fail-closed.
++3. **ATK:** OKX MCP `market_get_ticker` stdio; başarısızlıkta MOCK fiyatla devam edilmez; karar motoru ve takipçiler fail-closed.
+ 4. **Komisyon:** `0.001` varsayımı kodda etiketli (`DEFAULT_FEE_RATE`).
+ 5. **Gölge sınıfları:** `CONSTITUTIONAL_RISK_BLOCK`, `PASS_OBSERVATION`, `TECHNICAL_UNEXECUTABLE`.
+ 6. **Eski API:** `golge_defter.risk` geriye dönük uyumluluk shim'i.
+ 7. **Kill-switch / canlı onay:** Hackathon MVP'de uygulanmadı; spec'teki canlı emir akışı bilinçli olarak kapalı.
++
++## Jüri denetimi düzeltmeleri
++
++- Güncel düzeltme sürümü `rules_v2_audit1`; eski `rules_v2` kayıtları geriye dönük değiştirilmez.
++- Günlük gerçekleşmiş zarar sınırı `min(gün başı bakiye × %5, 5 USDT)`; iki sınırdan daha sıkı olanı uygulanır.
++- Minimum emir altındaki BUY/PASS adayları risk fırsatı değildir; `TECHNICAL_BLOCK` olarak ayrılır.
++- Yerel SHA-256 ve dışarıdan verilen işlem URL'si blockchain doğrulaması değildir. Mevcut kod receipt ve zincirdeki hash eşleşmesini doğrulamaz.
++- Mum verisi olmadan yapılan dönem sonu shadow hesabı `stop_dogrulamasi_sinirli` notuyla gösterilir.
++- Güncel test ve kalan sınırlar: `reports/jury-audit/summary.md`.
+diff --git a/docs/yatirim_anayasasi.md b/docs/yatirim_anayasasi.md
+index bdf09f5..1791a5d 100644
+--- a/docs/yatirim_anayasasi.md
++++ b/docs/yatirim_anayasasi.md
+@@ -53,13 +53,13 @@ Projenin iddiası rakamların kendisi değil, şu ilkedir: **taban ne olursa ols
+ | 3 | **İzinli pariteler** | Yalnızca AVAX, BTC, ETH (USDT karşılığı) | Az bilinen, oynak ya da manipülasyona açık coinlerden uzak durmak için | "DOGE al" önerisi doğrudan engellenir |
+ | 4 | **Maksimum makas** | Alış-satış farkı en fazla %0.15 | Fark açıksa alır almaz zarardasın demektir; piyasa sığ ya da dengesiz | Makas %0.3 ise işlem yapılmaz |
+ | 5 | **Zorunlu zarar kesme** | Alış fiyatından en fazla %2.5 düşüş | Kaybın büyümeden durdurulması için | 12,5 USDT'lik pozisyonda en fazla ~0,31 USDT kayıp |
+-| 6 | **Günlük zarar limiti** | Gün başı bakiyesinin en fazla %5'i | Kötü bir günde zararın birikip kontrolden çıkmaması için | Gün içinde 2,5 USDT kaybedilirse o gün yeni alım yok |
++| 6 | **Günlük zarar limiti** | Gün başı bakiyesinin %5'i ile 5 USDT sınırından küçüğü | Kötü bir günde zararın birikip kontrolden çıkmaması için | Gün içinde 2,5 USDT kaybedilirse o gün yeni alım yok |
+ | 7 | **Bekleme süresi** | Aynı paritede kapanıştan sonra 15 dakika | Zarar sonrası "hemen geri alayım" döngüsünü engellemek için | AVAX zararla satıldıysa 15 dakika AVAX alınmaz |
+ 
+ ### Anayasadan bağımsız iki teknik kontrol
+ 
+ - **Minimum emir kontrolü:** Hesaplanan tutar borsanın kabul ettiği en küçük emirden azsa işlem yapılmaz ve "teknik kayıt" olarak ayrı tutulur. Kural ihlali sayılmaz.
+-- **Asgari bakiye kontrolü:** Bakiye 40 USDT'nin altına düşerse %25 ile minimum emir karşılanamaz; sistem otomatik olarak yalnızca gözlem moduna geçer.
++- **Asgari bakiye kontrolü:** Minimum emir pariteye ve fiyata bağlıdır. %25 ile hesaplanan tutar adaptörden gelen minimumun altındaysa teknik kayıt oluşur; sabit 40 USDT eşiği tek başına risk engeli sayılmaz.
+ 
+ ---
+ 
+@@ -103,9 +103,9 @@ Engellenen her öneri **hangi maddeye takıldığıyla** birlikte Gölge Defter'
+ 
+ ## Değişiklikler Nasıl Kayıt Altına Alınır?
+ 
+-Kullanıcı her kural değiştirdiğinde anayasanın **yeni bir sürümü** oluşur ve bu sürümün dijital bir parmak izi (hash) çıkarılır. Her karar, verildiği andaki anayasa sürümüyle birlikte kaydedilir ve bu kayıtlar Avalanche'a yazılır.
++Hedef mimaride her kural değişikliğinin sürümlenmesi ve zincire sabitlenmesi planlanır. Mevcut MVP kararların kod sürümünü kaydeder; kural başına otomatik sürüm/hash üretimi ve Avalanche'a yazma uygulanmış değildir. `chain/anchor_job.py` yalnızca yerel karar grubu SHA-256 manifesti üretir.
+ 
+-Böylece sonradan "o gün kurallar böyle değildi" denemez. Hangi kararın hangi kurallarla verildiği her zaman kanıtlanabilir.
++Yerel hash, zincir receipt veya değiştirilemez zaman damgası kanıtı değildir. Mevcut doğrulama sınırları jüri denetim raporunda açıkça ayrılır.
+ 
+ ---
+ 
+@@ -128,11 +128,13 @@ Böylece sonradan "o gün kurallar böyle değildi" denemez. Hangi kararın hang
+ | 3 parite listesi | Evet | `PAIR` |
+ | 4 makas | Evet | `SPREAD` |
+ | 5 stop | Evet | PAPER `paper_broker` |
+-| 6 günlük zarar %5 | Evet | Gün başı bakiye × %5 |
++| 6 günlük zarar | Evet | min(gün başı bakiye × %5, 5 USDT) |
+ | 7 bekleme 15 dk | Evet | `COOLDOWN` |
+ | Min emir | Evet | `TECHNICAL_BLOCK` / gölge teknik |
+-| 40 USDT gözlem | Evet | `OBSERVATION` (bakiye < 40 ve %25 < min emir) |
++| Minimum altında gözlem | Evet | `TECHNICAL_BLOCK`; eski OBSERVATION kayıtları risk metriğinden çıkarılır |
+ | Avalanche hash | Hayır | Faz 2 / bonus |
+ | Tam Anayasa Derleyicisi | Kısmi | Yalnızca tavan sıkılaştırma |
+ 
+ Canlı worker **15:00 restart** sonrası `rules_v2` etiketi `decisions.rules_version` alanına yazılır; restart öncesi kayıtlar boş veya eski davranıştır.
++
++Jüri denetimi sonrası kod sürümü: `rules_v2_audit1`. Testler ve sınırlamalar: `reports/jury-audit/summary.md`.
+diff --git a/main.py b/main.py
+index 2c57e50..2ffb560 100644
+--- a/main.py
++++ b/main.py
+@@ -33,10 +33,11 @@ def main() -> None:
+     user_msg = ""
+     if args.user_rule.strip():
+         rules, _, user_msg = apply_user_request(rules, args.user_rule)
++    db.get_day_start_balance(utc_day(now))
++    monitor_open_positions(db, market, now, utc_day(now))
+     decision, ref_id = run_decision_cycle(
+         db, rules=rules, signal=signal, market=market, now=now
+     )
+-    monitor_open_positions(db, market, now, utc_day(now))
+     evaluate_due_shadows(db, market, now)
+     print(
+         {
+diff --git a/report.py b/report.py
+index d56a9f7..9879c80 100644
+--- a/report.py
++++ b/report.py
+@@ -41,14 +41,26 @@ def _ensure_schema(db_path: Path) -> None:
+         )
+ 
+ 
+-def build_report(db_path: Path) -> dict:
+-    _ensure_schema(db_path)
+-    conn = sqlite3.connect(db_path)
++def build_report(db_path: Path, *, connection: sqlite3.Connection | None = None) -> dict:
++    if connection is None:
++        _ensure_schema(db_path)
++    conn = connection if connection is not None else sqlite3.connect(f"file:{db_path}?mode=ro", uri=True)
+     conn.row_factory = sqlite3.Row
++    if connection is None:
++        conn.execute("BEGIN")
+     try:
+-        decisions = _count_by(conn, "decisions", "status")
++        decisions = {str(r[0]): int(r[1]) for r in conn.execute("""
++            SELECT CASE WHEN status='SHADOW_RISK' AND rule IN ('OBSERVATION','MIN_ORDER')
++                        THEN 'TECHNICAL_BLOCK' ELSE status END AS effective_status, COUNT(*)
++            FROM decisions GROUP BY effective_status
++        """)}
++        signal_origins = _count_by(conn, "decisions", "signal_origin")
+         market_sources = _count_by(conn, "decisions", "market_source")
+-        shadow_by_cat = _count_by(conn, "shadow_trades", "category")
++        shadow_by_cat = {str(r[0]): int(r[1]) for r in conn.execute("""
++            SELECT CASE WHEN constitution_rule IN ('OBSERVATION','MIN_ORDER')
++                        THEN 'TECHNICAL_UNEXECUTABLE' ELSE category END AS effective_category, COUNT(*)
++            FROM shadow_trades GROUP BY effective_category
++        """)}
+         shadow_by_source = _count_by(conn, "shadow_trades", "source")
+         eval_status = _count_by(conn, "shadow_evaluations", "status")
+         pending = conn.execute(
+@@ -63,6 +75,7 @@ def build_report(db_path: Path) -> dict:
+             JOIN shadow_trades st ON st.id = se.shadow_id
+             WHERE se.horizon_minutes=15 AND se.status='COMPLETE'
+               AND se.feed_source IN ('ATK_LIVE_MARKET', 'ATK')
++              AND st.source IN ('ATK_LIVE_MARKET', 'ATK')
+             """
+         ).fetchone()[0]
+         complete_60 = conn.execute(
+@@ -76,6 +89,7 @@ def build_report(db_path: Path) -> dict:
+             JOIN shadow_trades st ON st.id = se.shadow_id
+             WHERE se.horizon_minutes=60 AND se.status='COMPLETE'
+               AND st.source IN ('ATK_LIVE_MARKET', 'ATK')
++              AND se.feed_source IN ('ATK_LIVE_MARKET', 'ATK')
+             """
+         ).fetchone()[0]
+         last_decision = conn.execute(
+@@ -88,12 +102,14 @@ def build_report(db_path: Path) -> dict:
+             "SELECT COUNT(*) FROM positions WHERE status = 'OPEN'"
+         ).fetchone()[0]
+     finally:
+-        conn.close()
++        if connection is None:
++            conn.close()
+ 
+     return {
+         "db": str(db_path),
+         "decisions_by_status": decisions,
+         "decisions_by_market_source": market_sources,
++        "decisions_by_signal_origin": signal_origins,
+         "shadow_by_category": shadow_by_cat,
+         "shadow_by_feed_source": shadow_by_source,
+         "evaluations_by_status": eval_status,
+@@ -109,9 +125,13 @@ def build_report(db_path: Path) -> dict:
+         "open_paper_positions": int(open_positions),
+         "notes": [
+             "PAPER only; no LIVE orders.",
++            "ATK market data does not imply an LLM signal; signal origins are counted separately.",
++            "Legacy OBSERVATION/MIN_ORDER risk rows are counted as technical without rewriting stored records.",
++            "COMPLETE counts include all categories; technical observations are not risk protection metrics.",
++            "Live-feed counts require both entry and exit from ATK; they are not verified LLM performance.",
+             "FIXTURE/MOCK counts are not live market proof.",
+             "Pending 15/60 rows are normal until horizon elapses; feed_source fills on COMPLETE.",
+-            "TECHNICAL_BLOCK/MIN_ORDER: constitutional notional (25% of balance) below adapter min order (~10 USDT), not a risk veto.",
++            "TECHNICAL_BLOCK/MIN_ORDER: constitutional notional (25% of balance) below the per-symbol adapter minimum, not a risk veto.",
+         ],
+     }
+ 
+@@ -129,6 +149,9 @@ def format_markdown(report: dict) -> str:
+     lines.extend(["", "## Kararlar (piyasa kaynağı)"])
+     for key, count in sorted(report["decisions_by_market_source"].items()):
+         lines.append(f"- {key}: {count}")
++    lines.extend(["", "## Sinyal kökeni"])
++    for key, count in sorted(report["decisions_by_signal_origin"].items()):
++        lines.append(f"- {key}: {count}")
+     lines.extend(
+         [
+             "",
+@@ -139,8 +162,8 @@ def format_markdown(report: dict) -> str:
+             "## 15/60 değerlendirme",
+             f"- Durum: {report['evaluations_by_status']}",
+             f"- Bekleyen: {report['pending_evaluations']}",
+-            f"- Tamamlanan 15 dk: {report['complete_15m']} (ATK canlı: {report['complete_15m_live_feed']})",
+-            f"- Tamamlanan 60 dk: {report['complete_60m']} (ATK canlı: {report['complete_60m_live_feed']})",
++            f"- Tamamlanan 15 dk: {report['complete_15m']} (ATK giriş/çıkış kökeni: {report['complete_15m_live_feed']})",
++            f"- Tamamlanan 60 dk: {report['complete_60m']} (ATK giriş/çıkış kökeni: {report['complete_60m_live_feed']})",
+             "",
+             "## Engelleme sınıflandırması",
+             f"- TECHNICAL_BLOCK (min emir / icra): {report['decisions_technical_block']}",
+diff --git a/shadow_agent.py b/shadow_agent.py
+index 54a4be0..e6a8311 100644
+--- a/shadow_agent.py
++++ b/shadow_agent.py
+@@ -40,18 +40,19 @@ def run_cycle(
+         rules, _, msg = apply_user_request(rules, user_rule)
+         logging.info("user_rule: %s", msg)
+     for symbol in symbols:
+-        now = int(time.time())
+-        day = utc_day(now)
+         try:
+             market = adapter.fetch_snapshot(symbol)
+         except Exception as exc:
+             logging.warning("MARKET_UNAVAILABLE %s: %s", symbol, exc)
+             continue
++        now = int(time.time())
++        db.get_day_start_balance(utc_day(now))
++        monitor_open_positions(db, market, now, utc_day(now))
+         signal = resolve_signal(market, analyst=analyst)
++        now = int(time.time())
+         decision, ref_id = run_decision_cycle(
+             db, rules=rules, signal=signal, market=market, now=now
+         )
+-        monitor_open_positions(db, market, now, day)
+         evaluate_due_shadows(db, market, now)
+         logging.info(
+             "cycle symbol=%s source=%s decision=%s rule=%s ref=%s",
+diff --git a/storage/database.py b/storage/database.py
+index 1b2ec04..91835ea 100644
+--- a/storage/database.py
++++ b/storage/database.py
+@@ -119,6 +119,21 @@ class Database:
+             )
+             self._ensure_column(conn, "shadow_evaluations", "feed_source", "TEXT DEFAULT ''")
+             self._ensure_column(conn, "decisions", "rules_version", "TEXT DEFAULT ''")
++            self._ensure_column(conn, "positions", "market_source", "TEXT NOT NULL DEFAULT ''")
++            # Recover provenance for old positions only from an unambiguous decision.
++            conn.execute("""
++                UPDATE positions SET market_source = (
++                    SELECT MIN(d.market_source) FROM decisions d
++                    WHERE d.status='APPROVED_PAPER' AND d.ref_id=positions.id
++                      AND d.symbol=positions.symbol
++                    HAVING COUNT(DISTINCT d.market_source)=1
++                )
++                WHERE market_source='' AND EXISTS (
++                    SELECT 1 FROM decisions d WHERE d.status='APPROVED_PAPER'
++                      AND d.ref_id=positions.id AND d.symbol=positions.symbol
++                    GROUP BY d.ref_id HAVING COUNT(DISTINCT d.market_source)=1
++                )
++            """)
+ 
+     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+         cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+diff --git a/tests/test_constitution_v2.py b/tests/test_constitution_v2.py
+index 9112724..4f2d3c0 100644
+--- a/tests/test_constitution_v2.py
++++ b/tests/test_constitution_v2.py
+@@ -59,9 +59,10 @@ def test_daily_loss_uses_percent_of_day_start():
+     assert d.rule == "DAILY_LOSS"
+ 
+ 
+-def test_observation_when_sub_40_and_below_min_order():
++def test_sub_40_minimum_is_technical_not_risk():
+     d = _buy(balance="35", day_start="35")
+-    assert d.rule == "OBSERVATION"
++    assert d.rule == "MIN_ORDER"
++    assert d.status == "TECHNICAL_BLOCK"
+ 
+ 
+ def test_technical_min_order_when_balance_above_observation_threshold():
+diff --git a/tests/test_jury_audit.py b/tests/test_jury_audit.py
+new file mode 100644
+index 0000000..f0d6d5f
+--- /dev/null
++++ b/tests/test_jury_audit.py
+@@ -0,0 +1,409 @@
++"""PAPER-only regression cases from the final specification audit. No network."""
++from dataclasses import replace
++from decimal import Decimal as D
++import time
++
++import pytest
++
++from adapters.okx_atk import OkxAtkMarketAdapter
++from contracts.models import AnalystSignal, ConstitutionRules, MarketSnapshot, ShadowCategory
++from core.constitution import evaluate
++from core.decision_engine import run_decision_cycle, utc_day
++from core.paper_broker import open_paper_position
++from core.position_monitor import monitor_open_positions
++from core.shadow_evaluator import evaluate_due_shadows, shadow_pnl
++from dashboard.snapshot import build_kokpit_snapshot
++from report import build_report
++from storage.database import Database
++
++NOW = 1_800_000_000
++
++
++def market(*, at=NOW, source="MOCK", bid="99.9", ask="100", minimum="10"):
++    return MarketSnapshot("AVAX-USDT", D(bid), D(ask), at, source, D(minimum))
++
++
++def shadow(db, *, source="MOCK", category=ShadowCategory.PASS_OBSERVATION):
++    return db.insert_shadow(symbol="AVAX-USDT", category=category, entry_ask=D("100"),
++        notional_usdt=D("25"), reason="MOCK audit", constitution_rule="ANALYST",
++        created_at=NOW, source=source)
++
++
++@pytest.mark.parametrize("action", ["BUY", "PASS"])
++@pytest.mark.parametrize("balance,bid", [("30", "99.9"), ("30", "90"), ("50", "90")])
++def test_unexecutable_is_technical_before_risk_or_pass(action, balance, bid):
++    tick = market(bid=bid, minimum="15")
++    decision = evaluate(constitution=ConstitutionRules(),
++        signal=AnalystSignal(tick.symbol, action, "audit"), market=tick,
++        available_usdt=D(balance), min_order_usdt=tick.min_order_usdt,
++        daily_realized_loss_usdt=D("5"), now=NOW)
++    assert decision.status == "TECHNICAL_BLOCK"
++    assert decision.shadow_category == ShadowCategory.TECHNICAL_UNEXECUTABLE
++
++
++@pytest.mark.parametrize("age", [11, -1])
++def test_atk_preserves_exchange_timestamp(monkeypatch, age):
++    monkeypatch.setattr("adapters.okx_atk.time.time", lambda: NOW)
++    adapter = OkxAtkMarketAdapter()
++    def tool(name, args, **kwargs):
++        rows = [{"ts": str((NOW-age)*1000), "bidPx": "99.9", "askPx": "100"}] if name == "market_get_ticker" else [{"minSz":"0.01","lotSz":"0.01"}]
++        return {"ok":True,"data":{"data":rows}}
++    monkeypatch.setattr(adapter, "_call_tool", tool)
++    assert adapter.fetch_snapshot("AVAX-USDT").captured_at == NOW-age
++
++
++def test_atk_missing_timestamp_is_not_fresh(monkeypatch):
++    adapter=OkxAtkMarketAdapter()
++    monkeypatch.setattr(adapter, "_call_tool", lambda *a, **kw: {"data":{"data":[{"bidPx":"99.9","askPx":"100"}]}})
++    with pytest.raises((ValueError, RuntimeError)):
++        adapter.fetch_snapshot("AVAX-USDT")
++
++
++@pytest.mark.parametrize("tick", [market(at=NOW+900-11), market(at=NOW+901), market(at=NOW+900,bid="101"), market(at=NOW+900,bid="0")])
++def test_invalid_market_cannot_complete_shadow(tmp_path, tick):
++    db=Database(tmp_path/"audit.db"); shadow(db)
++    assert evaluate_due_shadows(db,tick,NOW+900) == 0
++
++
++def test_mock_cannot_complete_atk_shadow(tmp_path):
++    db=Database(tmp_path/"audit.db"); shadow(db,source="ATK_LIVE_MARKET")
++    assert evaluate_due_shadows(db,market(at=NOW+900),NOW+900) == 0
++
++
++@pytest.mark.parametrize("tick", [market(at=NOW-11,bid="95"), market(at=NOW+1,bid="95"), market(bid="-1"), market(bid="NaN")])
++def test_invalid_market_cannot_close_position(tmp_path, tick):
++    db=Database(tmp_path/"audit.db")
++    open_paper_position(db,market=market(at=NOW-20),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW-20)
++    assert monitor_open_positions(db,tick,NOW,utc_day(NOW)) == []
++    assert db.get_daily_loss(utc_day(NOW)) == 0
++
++
++def test_mock_cannot_close_atk_position(tmp_path):
++    db=Database(tmp_path/"audit.db")
++    open_paper_position(db,market=market(source="ATK_LIVE_MARKET"),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW)
++    assert monitor_open_positions(db,market(bid="95"),NOW,utc_day(NOW)) == []
++
++
++def test_stop_loss_counts_both_fees_and_utc_reset(tmp_path):
++    db=Database(tmp_path/"audit.db")
++    pos=open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW)
++    assert monitor_open_positions(db,market(bid="95"),NOW,utc_day(NOW)) == [pos.id]
++    # quantity .25; sell 23.75; sell fee .02375; buy fee .025.
++    assert db.get_daily_loss(utc_day(NOW)) == D("1.29875")
++    assert db.get_paper_balance() == D("98.70125")
++    assert monitor_open_positions(db,market(bid="95"),NOW,utc_day(NOW)) == []
++    assert db.get_daily_loss(utc_day(NOW+86400)) == 0
++
++
++@pytest.mark.parametrize("horizon,bid,expected", [(15,"99","-0.29975"),(60,"101","0.19975")])
++def test_exact_shadow_pnl_and_limited_stop_note(tmp_path,horizon,bid,expected):
++    db=Database(tmp_path/"audit.db"); sid=shadow(db)
++    at=NOW+horizon*60
++    evaluate_due_shadows(db,market(at=at,bid=bid,ask=str(D(bid)+1)),at)
++    with db.session() as conn:
++        row=conn.execute("SELECT * FROM shadow_evaluations WHERE shadow_id=? AND horizon_minutes=?",(sid,horizon)).fetchone()
++    assert D(row["pnl_usdt"]) == D(expected)
++    assert "stop_dogrulamasi_sinirli" in row["note"]
++    assert evaluate_due_shadows(db,market(at=at,bid="90"),at) == 0
++
++
++def test_live_counter_requires_both_entry_and_exit(tmp_path):
++    db=Database(tmp_path/"audit.db")
++    for source,feed in [("MOCK","ATK_LIVE_MARKET"),("ATK_LIVE_MARKET","MOCK"),("ATK_LIVE_MARKET","ATK_LIVE_MARKET")]:
++        sid=shadow(db,source=source)
++        with db.session() as conn:
++            conn.execute("UPDATE shadow_evaluations SET status='COMPLETE',feed_source=?,pnl_usdt='-1',evaluated_at=? WHERE shadow_id=?",(feed,NOW+3600,sid))
++    report=build_report(db.path)
++    assert report["complete_15m_live_feed"] == report["complete_60m_live_feed"] == 1
++    snap=build_kokpit_snapshot(db.path)
++    assert sum(snap["eval_breakdown"]["15"].values()) == 3
++    assert snap["report"]["complete_15m"] == snap["eval_breakdown"]["15"]["COMPLETE"]
++
++
++def test_daily_loss_never_loosens_fixed_five_usdt():
++    decision=evaluate(constitution=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","BUY","audit"),
++        market=market(),available_usdt=D("200"),min_order_usdt=D("10"),daily_realized_loss_usdt=D("5"),
++        day_start_balance_usdt=D("200"),now=NOW)
++    assert decision.rule == "DAILY_LOSS"
++
++
++def test_stop_close_same_tick_blocks_next_buy(monkeypatch, tmp_path):
++    """MOCK worker E2E: stop and daily loss must precede the next decision."""
++    import shadow_agent
++    db=Database(tmp_path/"worker.db")
++    rules=ConstitutionRules()
++    db.get_day_start_balance(utc_day(NOW))
++    open_paper_position(db,market=market(at=NOW-1),notional_usdt=D("25"),rules=rules,now=NOW-1)
++    db.add_daily_loss(utc_day(NOW),D("4"))
++    tick=market(bid="95",ask="95.01")
++    monkeypatch.setattr(shadow_agent.time,"time",lambda: NOW)
++    monkeypatch.setattr(shadow_agent.MockMarketAdapter,"fetch_snapshot",lambda self,symbol: tick)
++    shadow_agent.run_cycle(db,symbols=[tick.symbol],source="mock",analyst="demo")
++    snap=build_kokpit_snapshot(db.path)
++    assert snap["recent_decisions"][0]["rule"] == "DAILY_LOSS"
++    assert snap["open_positions"] == []
++    assert snap["decisions_summary"] == {"SHADOW_RISK":1}
++
++
++def test_injected_atk_transport_to_dashboard_paper_and_shadow(monkeypatch,tmp_path):
++    """MOCK transport of ATK API shape, NOT evidence of an actual live fetch."""
++    import shadow_agent
++    import adapters.okx_atk
++    tick_time=[NOW]
++    price=[D("100")]
++    def tool(self,name,args,**kwargs):
++        if name == "market_get_ticker":
++            row={"instId":args["instId"],"ts":str(tick_time[0]*1000),"askPx":str(price[0]),"bidPx":str(price[0]-D("0.01"))}
++        else:
++            row={"instId":args["instId"],"minSz":"0.01","lotSz":"0.01"}
++        return {"ok":True,"data":{"data":[row]}}
++    monkeypatch.setattr(adapters.okx_atk.OkxAtkMarketAdapter,"_call_tool",tool)
++    monkeypatch.setattr(shadow_agent.time,"time",lambda: tick_time[0])
++    db=Database(tmp_path/"transport.db")
++    # Two cycles: first PAPER, second blocked by portfolio exposure.
++    for _ in range(2):
++        shadow_agent.run_cycle(db,symbols=["AVAX-USDT"],source="atk",analyst="demo")
++    snap=build_kokpit_snapshot(db.path)
++    assert snap["decisions_summary"] == {"APPROVED_PAPER":1,"SHADOW_RISK":1}
++    assert snap["report"]["decisions_by_signal_origin"] == {"DEMO":2}
++    assert snap["report"]["decisions_by_market_source"] == {"ATK_LIVE_MARKET":2}
++    for horizon in (15,60):
++        tick_time[0]=NOW+horizon*60
++        price[0]=D("101")
++        adapter=OkxAtkMarketAdapter()
++        tick=adapter.fetch_snapshot("AVAX-USDT")
++        assert evaluate_due_shadows(db,tick,tick_time[0]) == 1
++        assert evaluate_due_shadows(db,tick,tick_time[0]) == 0
++    snap=build_kokpit_snapshot(db.path)
++    assert snap["report"]["complete_15m_live_feed"] == 1
++    assert snap["report"]["complete_60m_live_feed"] == 1
++    assert snap["recent_shadow"][0]["signal_origin"] == "DEMO"
++    assert all("stop_dogrulamasi_sinirli" in r["note"] for r in snap["recent_shadow"])
++    assert all(r["entry_source"] == r["feed_source"] == "ATK_LIVE_MARKET" for r in snap["recent_shadow"])
++
++
++def test_legacy_technical_rows_are_not_risk_counts(tmp_path):
++    db=Database(tmp_path/"legacy.db")
++    sid=shadow(db,category=ShadowCategory.CONSTITUTIONAL_RISK_BLOCK)
++    with db.session() as conn:
++        conn.execute("UPDATE shadow_trades SET constitution_rule='OBSERVATION' WHERE id=?",(sid,))
++    db.insert_decision(symbol="AVAX-USDT",signal_action="BUY",signal_reason="legacy",signal_origin="DEMO",
++        status="SHADOW_RISK",rule="OBSERVATION",explanation="old classification",notional_usdt=D("7.5"),
++        market_source="MOCK",ref_id=sid,created_at=NOW)
++    snap=build_kokpit_snapshot(db.path)
++    assert snap["report"]["decisions_shadow_risk"] == 0
++    assert snap["report"]["decisions_technical_block"] == 1
++    assert snap["report"]["shadow_by_category"] == {"TECHNICAL_UNEXECUTABLE":1}
++    assert snap["recent_decisions"][0]["status"] == "TECHNICAL_BLOCK"
++    assert snap["recent_decisions"][0]["raw_status"] == "SHADOW_RISK"
++    assert all(r["category"] == "TECHNICAL_UNEXECUTABLE" for r in snap["recent_shadow"])
++    with db.session() as conn:
++        assert conn.execute("SELECT status FROM decisions").fetchone()[0] == "SHADOW_RISK"
++
++
++def test_snapshot_uses_single_read_transaction(monkeypatch,tmp_path):
++    import dashboard.snapshot as module
++    db=Database(tmp_path/"atomic.db")
++    with db.session() as conn:
++        conn.execute("PRAGMA journal_mode=WAL")
++    original=module.build_report
++    def report_then_concurrent_write(path,**kwargs):
++        result=original(path,**kwargs)
++        run_decision_cycle(db,rules=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","PASS","MOCK"),market=market(),now=NOW)
++        return result
++    monkeypatch.setattr(module,"build_report",report_then_concurrent_write)
++    snap=module.build_kokpit_snapshot(db.path)
++    assert snap["report"]["decisions_by_status"] == snap["decisions_summary"] == {}
++    assert snap["recent_decisions"] == []
++    assert snap["recent_shadow"] == []
++    assert all(v == 0 for h in snap["eval_breakdown"].values() for v in h.values())
++    assert build_report(db.path)["decisions_by_status"] == {"SHADOW_PASS":1}
++
++
++def test_llm_fail_closed_does_not_create_shadow_performance(tmp_path,monkeypatch):
++    from core.analyst import resolve_signal
++    monkeypatch.delenv("OPENAI_API_KEY",raising=False)
++    signal=resolve_signal(market(),analyst="llm")
++    assert signal.origin == "LLM"
++    db=Database(tmp_path/"llm.db")
++    decision,ref=run_decision_cycle(db,rules=ConstitutionRules(),signal=signal,market=market(),now=NOW)
++    assert decision.status == "NO_DECISION"
++    assert ref is None
++    assert build_report(db.path)["shadow_by_category"] == {}
++
++
++def test_analyst_rejects_amount_authority():
++    from core.analyst import validate_analyst_payload
++    with pytest.raises(ValueError):
++        validate_analyst_payload({"symbol":"AVAX-USDT","action":"BUY","reason":"MOCK","amount":80})
++
++
++def test_llm_request_contains_market_and_rejects_different_symbol(monkeypatch):
++    import json
++    import urllib.request
++    from core.analyst import llm_signal
++    monkeypatch.setenv("OPENAI_API_KEY","MOCK_NOT_A_KEY")
++    def urlopen(req,timeout):
++        body=json.loads(req.data)
++        prompt=body["messages"][1]["content"]
++        assert '"bid": "99.9"' in prompt and '"ask": "100"' in prompt
++        class Response:
++            def __enter__(self): return self
++            def __exit__(self,*args): pass
++            def read(self): return json.dumps({"choices":[{"message":{"content":json.dumps({"symbol":"BTC-USDT","action":"BUY","reason":"MOCK"})}}]}).encode()
++        return Response()
++    monkeypatch.setattr(urllib.request,"urlopen",urlopen)
++    signal=llm_signal(market())
++    assert signal.action == "PASS" and signal.reason.startswith("LLM_FAIL_CLOSED:")
++
++
++def test_local_hash_is_not_blockchain_and_batch_count_is_exact(tmp_path,monkeypatch):
++    from chain.anchor_job import build_manifest
++    db=Database(tmp_path/"chain.db")
++    for _ in range(3):
++        run_decision_cycle(db,rules=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","PASS","MOCK"),market=market(),now=NOW)
++    monkeypatch.setenv("FUJI_LAST_TX","https://testnet.snowtrace.io/tx/"+"a"*64)
++    manifest=build_manifest(db.path,limit=2)
++    assert manifest["decision_count"] == 2 and manifest["total_decision_count"] == 3
++    assert manifest["blockchain_verified"] is False
++    assert manifest["proof_kind"] == "LOCAL_SHA256"
++    assert len(manifest["sha256"]) == 64
++    first=manifest["sha256"]
++    with db.session() as conn:
++        conn.execute("UPDATE decisions SET signal_reason='changed' WHERE id=3")
++    assert build_manifest(db.path,limit=2)["sha256"] != first
++
++
++def test_manifest_claim_cannot_self_verify(tmp_path,monkeypatch):
++    import json
++    import dashboard.snapshot as module
++    evidence=tmp_path/"evidence"; evidence.mkdir()
++    (evidence/"anchor_manifest.json").write_text(json.dumps({"sha256":"a"*64,"blockchain_verified":True}))
++    monkeypatch.setattr(module,"ROOT",tmp_path)
++    assert module._load_anchor_manifest()["blockchain_verified"] is False
++
++
++def test_atk_unknown_minimum_fails_closed(monkeypatch):
++    adapter=OkxAtkMarketAdapter()
++    def tool(name,args,**kwargs):
++        row=[{"ts":str(NOW*1000),"bidPx":"99.9","askPx":"100"}] if name=="market_get_ticker" else []
++        return {"data":{"data":row}}
++    monkeypatch.setattr(adapter,"_call_tool",tool)
++    with pytest.raises(RuntimeError,match="minimum unavailable"):
++        adapter.fetch_snapshot("AVAX-USDT")
++
++
++def test_atk_mcp_notifications_share_three_second_deadline(monkeypatch):
++    """Controlled clock: initialization consumes budget; tool gets the remainder."""
++    import io,json
++    import adapters.okx_atk as module
++    clock=[0.0]
++    class Stream(io.StringIO):
++        def readline(self):
++            clock[0]+=0.9
++            return super().readline()
++    class Process:
++        stdin=io.StringIO()
++        stdout=Stream('\n'.join(json.dumps(p) for p in [
++            {"jsonrpc":"2.0","method":"notification"},
++            {"jsonrpc":"2.0","id":1,"result":{}},
++            {"jsonrpc":"2.0","method":"notification"},
++            {"jsonrpc":"2.0","method":"notification"},
++            {"jsonrpc":"2.0","id":2,"result":{"content":[]}},
++        ])+'\n')
++        def terminate(self): pass
++        def wait(self,timeout=None): pass
++    monkeypatch.setattr(module.subprocess,"Popen",lambda *a,**kw: Process())
++    monkeypatch.setattr(module.time,"monotonic",lambda:clock[0])
++    with pytest.raises(TimeoutError):
++        OkxAtkMarketAdapter(timeout_seconds=3)._call_tool("market_get_ticker",{})
++
++
++def test_snapshot_deadline_is_shared_by_ticker_and_instrument(monkeypatch):
++    import adapters.okx_atk as module
++    clock=[0.0]; budgets=[]
++    def tool(self,name,args,**kwargs):
++        budgets.append(kwargs["timeout_seconds"])
++        clock[0]+=2
++        rows=[{"ts":str(NOW*1000),"bidPx":"99.9","askPx":"100"}] if name=="market_get_ticker" else [{"minSz":".01","lotSz":".01"}]
++        return {"data":{"data":rows}}
++    monkeypatch.setattr(module.time,"monotonic",lambda:clock[0])
++    monkeypatch.setattr(module.OkxAtkMarketAdapter,"_call_tool",tool)
++    with pytest.raises(TimeoutError):
++        module.OkxAtkMarketAdapter().fetch_snapshot("AVAX-USDT")
++    assert budgets == [3,1]
++
++
++def test_worker_time_is_taken_after_fetch(monkeypatch,tmp_path):
++    import shadow_agent
++    clock=[NOW]
++    def fetch(self,symbol):
++        clock[0]+=2
++        return market(at=clock[0])
++    monkeypatch.setattr(shadow_agent.time,"time",lambda:clock[0])
++    monkeypatch.setattr(shadow_agent.MockMarketAdapter,"fetch_snapshot",fetch)
++    db=Database(tmp_path/"clock.db")
++    shadow_agent.run_cycle(db,symbols=["AVAX-USDT"],source="mock",analyst="demo")
++    assert build_kokpit_snapshot(db.path)["recent_decisions"][0]["status"] == "APPROVED_PAPER"
++
++
++def test_early_late_and_immutable_evaluation(tmp_path):
++    db=Database(tmp_path/"timing.db"); sid=shadow(db)
++    assert evaluate_due_shadows(db,market(at=NOW+899),NOW+899)==0
++    assert evaluate_due_shadows(db,market(at=NOW+1021,bid="99"),NOW+1021)==1
++    with db.session() as conn:
++        first=dict(conn.execute("SELECT * FROM shadow_evaluations WHERE shadow_id=? AND horizon_minutes=15",(sid,)).fetchone())
++    assert "LATE_EVALUATION" in first["note"]
++    assert evaluate_due_shadows(db,market(at=NOW+1100,bid="90"),NOW+1100)==0
++    with db.session() as conn:
++        second=dict(conn.execute("SELECT * FROM shadow_evaluations WHERE shadow_id=? AND horizon_minutes=15",(sid,)).fetchone())
++    assert first==second
++
++
++def test_position_provenance_migration_recovers_from_matching_decision(tmp_path):
++    db=Database(tmp_path/"migration.db")
++    result,ref=run_decision_cycle(db,rules=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","BUY","MOCK"),market=market(source="ATK_LIVE_MARKET"),now=NOW)
++    assert result.status=="APPROVED_PAPER"
++    with db.session() as conn:
++        conn.execute("UPDATE positions SET market_source='' WHERE id=?",(ref,))
++    migrated=Database(db.path)
++    with migrated.session() as conn:
++        assert conn.execute("SELECT market_source FROM positions WHERE id=?",(ref,)).fetchone()[0]=="ATK_LIVE_MARKET"
++    assert monitor_open_positions(migrated,market(source="MOCK",bid="95"),NOW,utc_day(NOW))==[]
++    assert monitor_open_positions(migrated,market(source="ATK_LIVE_MARKET",bid="95"),NOW,utc_day(NOW))==[ref]
++
++
++@pytest.mark.parametrize("bid,should_close",[("97.50001",False),("97.5",True),("90",True)])
++def test_stop_threshold_and_gap_execute_at_actual_bid(tmp_path,bid,should_close):
++    db=Database(tmp_path/"threshold.db")
++    position=open_paper_position(db,market=market(),notional_usdt=D("25"),rules=ConstitutionRules(),now=NOW)
++    closed=monitor_open_positions(db,market(bid=bid),NOW,utc_day(NOW))
++    assert closed==([position.id] if should_close else [])
++    if should_close:
++        expected=-(shadow_pnl(D("100"),D(bid),D("25")))
++        assert db.get_daily_loss(utc_day(NOW))==expected
++
++
++def test_daily_loss_resets_on_utc_boundary_but_includes_new_close(tmp_path):
++    from datetime import datetime,timezone
++    midnight=int(datetime(2026,10,18,tzinfo=timezone.utc).timestamp())
++    db=Database(tmp_path/"midnight.db")
++    db.add_daily_loss(utc_day(midnight-1),D("5"))
++    open_paper_position(db,market=market(at=midnight-1),notional_usdt=D("25"),rules=ConstitutionRules(),now=midnight-1)
++    monitor_open_positions(db,market(at=midnight,bid="95"),midnight,utc_day(midnight))
++    assert db.get_daily_loss(utc_day(midnight))==D("1.29875")
++
++
++@pytest.mark.parametrize("source",["MOCK","ATK_LIVE_MARKET"])
++def test_stale_decision_creates_neither_paper_nor_shadow(tmp_path,source):
++    db=Database(tmp_path/"stale.db")
++    decision,ref=run_decision_cycle(db,rules=ConstitutionRules(),signal=AnalystSignal("AVAX-USDT","BUY","audit"),market=market(at=NOW-11,source=source),now=NOW)
++    snap=build_kokpit_snapshot(db.path)
++    assert decision.status=="NO_DECISION" and ref is None
++    assert snap["open_positions"]==snap["recent_shadow"]==[]
++
++
++def test_due_time_requires_quote_from_horizon_not_just_fresh_quote(tmp_path):
++    db=Database(tmp_path/"horizon-quote.db"); shadow(db)
++    assert evaluate_due_shadows(db,market(at=NOW+899),NOW+900)==0
++    assert evaluate_due_shadows(db,market(at=NOW+900),NOW+900)==1

@@ -53,13 +53,13 @@ Projenin iddiası rakamların kendisi değil, şu ilkedir: **taban ne olursa ols
 | 3 | **İzinli pariteler** | Yalnızca AVAX, BTC, ETH (USDT karşılığı) | Az bilinen, oynak ya da manipülasyona açık coinlerden uzak durmak için | "DOGE al" önerisi doğrudan engellenir |
 | 4 | **Maksimum makas** | Alış-satış farkı en fazla %0.15 | Fark açıksa alır almaz zarardasın demektir; piyasa sığ ya da dengesiz | Makas %0.3 ise işlem yapılmaz |
 | 5 | **Zorunlu zarar kesme** | Alış fiyatından en fazla %2.5 düşüş | Kaybın büyümeden durdurulması için | 12,5 USDT'lik pozisyonda en fazla ~0,31 USDT kayıp |
-| 6 | **Günlük zarar limiti** | Gün başı bakiyesinin en fazla %5'i | Kötü bir günde zararın birikip kontrolden çıkmaması için | Gün içinde 2,5 USDT kaybedilirse o gün yeni alım yok |
+| 6 | **Günlük zarar limiti** | Gün başı bakiyesinin %5'i ile 5 USDT sınırından küçüğü | Kötü bir günde zararın birikip kontrolden çıkmaması için | Gün içinde 2,5 USDT kaybedilirse o gün yeni alım yok |
 | 7 | **Bekleme süresi** | Aynı paritede kapanıştan sonra 15 dakika | Zarar sonrası "hemen geri alayım" döngüsünü engellemek için | AVAX zararla satıldıysa 15 dakika AVAX alınmaz |
 
 ### Anayasadan bağımsız iki teknik kontrol
 
 - **Minimum emir kontrolü:** Hesaplanan tutar borsanın kabul ettiği en küçük emirden azsa işlem yapılmaz ve "teknik kayıt" olarak ayrı tutulur. Kural ihlali sayılmaz.
-- **Asgari bakiye kontrolü:** Bakiye 40 USDT'nin altına düşerse %25 ile minimum emir karşılanamaz; sistem otomatik olarak yalnızca gözlem moduna geçer.
+- **Asgari bakiye kontrolü:** Minimum emir pariteye ve fiyata bağlıdır. %25 ile hesaplanan tutar adaptörden gelen minimumun altındaysa teknik kayıt oluşur; sabit 40 USDT eşiği tek başına risk engeli sayılmaz.
 
 ---
 
@@ -103,9 +103,9 @@ Engellenen her öneri **hangi maddeye takıldığıyla** birlikte Gölge Defter'
 
 ## Değişiklikler Nasıl Kayıt Altına Alınır?
 
-Kullanıcı her kural değiştirdiğinde anayasanın **yeni bir sürümü** oluşur ve bu sürümün dijital bir parmak izi (hash) çıkarılır. Her karar, verildiği andaki anayasa sürümüyle birlikte kaydedilir ve bu kayıtlar Avalanche'a yazılır.
+Hedef mimaride her kural değişikliğinin sürümlenmesi ve zincire sabitlenmesi planlanır. Mevcut MVP kararların kod sürümünü kaydeder; kural başına otomatik sürüm/hash üretimi ve Avalanche'a yazma uygulanmış değildir. `chain/anchor_job.py` yalnızca yerel karar grubu SHA-256 manifesti üretir.
 
-Böylece sonradan "o gün kurallar böyle değildi" denemez. Hangi kararın hangi kurallarla verildiği her zaman kanıtlanabilir.
+Yerel hash, zincir receipt veya değiştirilemez zaman damgası kanıtı değildir. Mevcut doğrulama sınırları jüri denetim raporunda açıkça ayrılır.
 
 ---
 
@@ -128,11 +128,13 @@ Böylece sonradan "o gün kurallar böyle değildi" denemez. Hangi kararın hang
 | 3 parite listesi | Evet | `PAIR` |
 | 4 makas | Evet | `SPREAD` |
 | 5 stop | Evet | PAPER `paper_broker` |
-| 6 günlük zarar %5 | Evet | Gün başı bakiye × %5 |
+| 6 günlük zarar | Evet | min(gün başı bakiye × %5, 5 USDT) |
 | 7 bekleme 15 dk | Evet | `COOLDOWN` |
 | Min emir | Evet | `TECHNICAL_BLOCK` / gölge teknik |
-| 40 USDT gözlem | Evet | `OBSERVATION` (bakiye < 40 ve %25 < min emir) |
+| Minimum altında gözlem | Evet | `TECHNICAL_BLOCK`; eski OBSERVATION kayıtları risk metriğinden çıkarılır |
 | Avalanche hash | Hayır | Faz 2 / bonus |
 | Tam Anayasa Derleyicisi | Kısmi | Yalnızca tavan sıkılaştırma |
 
 Canlı worker **15:00 restart** sonrası `rules_v2` etiketi `decisions.rules_version` alanına yazılır; restart öncesi kayıtlar boş veya eski davranıştır.
+
+Jüri denetimi sonrası kod sürümü: `rules_v2_audit1`. Testler ve sınırlamalar: `reports/jury-audit/summary.md`.

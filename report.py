@@ -131,7 +131,7 @@ def build_report(db_path: Path, *, connection: sqlite3.Connection | None = None)
             "Live-feed counts require both entry and exit from ATK; they are not verified LLM performance.",
             "FIXTURE/MOCK counts are not live market proof.",
             "Pending 15/60 rows are normal until horizon elapses; feed_source fills on COMPLETE.",
-            "TECHNICAL_BLOCK/MIN_ORDER: constitutional notional (25% of balance) below adapter min order (~10 USDT), not a risk veto.",
+            "TECHNICAL_BLOCK/MIN_ORDER: constitutional notional (25% of balance) below the per-symbol adapter minimum, not a risk veto.",
         ],
     }
 
@@ -162,8 +162,8 @@ def format_markdown(report: dict) -> str:
             "## 15/60 değerlendirme",
             f"- Durum: {report['evaluations_by_status']}",
             f"- Bekleyen: {report['pending_evaluations']}",
-            f"- Tamamlanan 15 dk: {report['complete_15m']} (ATK canlı: {report['complete_15m_live_feed']})",
-            f"- Tamamlanan 60 dk: {report['complete_60m']} (ATK canlı: {report['complete_60m_live_feed']})",
+            f"- Tamamlanan 15 dk: {report['complete_15m']} (ATK giriş/çıkış kökeni: {report['complete_15m_live_feed']})",
+            f"- Tamamlanan 60 dk: {report['complete_60m']} (ATK giriş/çıkış kökeni: {report['complete_60m_live_feed']})",
             "",
             "## Engelleme sınıflandırması",
             f"- TECHNICAL_BLOCK (min emir / icra): {report['decisions_technical_block']}",

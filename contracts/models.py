@@ -38,7 +38,7 @@ class ConstitutionRules:
     pair_cooldown_seconds: int = 15 * 60
     observation_min_balance_usdt: Decimal = D("40")
     max_data_age_seconds: int = 10
-    rules_version: str = "rules_v2"
+    rules_version: str = "rules_v2_audit1"
 
 
 @dataclass(frozen=True)
