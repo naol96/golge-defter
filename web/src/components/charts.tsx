@@ -401,4 +401,3 @@ function roundTopRect(x: number, y: number, w: number, h: number, r: number): st
   if (h <= 0) return "";
   return `M${x},${y + h}V${y + rr}Q${x},${y} ${x + rr},${y}H${x + w - rr}Q${x + w},${y} ${x + w},${y + rr}V${y + h}Z`;
 }
-
