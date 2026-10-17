@@ -47,7 +47,7 @@ class Database:
                   daily_loss_day TEXT NOT NULL
                 );
                 INSERT OR IGNORE INTO paper_state (id, balance_usdt, daily_loss_usdt, daily_loss_day)
-                VALUES (1, '50', '0', '');
+                VALUES (1, '100', '0', '');
 
                 CREATE TABLE IF NOT EXISTS positions (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,

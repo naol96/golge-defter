@@ -71,6 +71,12 @@ def build_report(db_path: Path) -> dict:
         last_decision = conn.execute(
             "SELECT * FROM decisions ORDER BY id DESC LIMIT 1"
         ).fetchone()
+        paper_balance = conn.execute(
+            "SELECT balance_usdt FROM paper_state WHERE id = 1"
+        ).fetchone()
+        open_positions = conn.execute(
+            "SELECT COUNT(*) FROM positions WHERE status = 'OPEN'"
+        ).fetchone()[0]
     finally:
         conn.close()
 
@@ -86,10 +92,13 @@ def build_report(db_path: Path) -> dict:
         "complete_60m": int(complete_60),
         "complete_60m_live_feed": int(live_60),
         "last_decision": dict(last_decision) if last_decision else None,
+        "paper_balance_usdt": str(paper_balance[0]) if paper_balance else None,
+        "open_paper_positions": int(open_positions),
         "notes": [
             "PAPER only; no LIVE orders.",
             "FIXTURE/MOCK counts are not live market proof.",
-            "Pending 15/60 rows are normal until horizon elapses.",
+            "Pending 15/60 rows are normal until horizon elapses; feed_source fills on COMPLETE.",
+            "TECHNICAL_BLOCK/MIN_ORDER: constitutional notional (25% of balance) below adapter min order (~10 USDT), not a risk veto.",
         ],
     }
 
@@ -120,6 +129,10 @@ def format_markdown(report: dict) -> str:
             f"- Tamamlanan 15 dk: {report['complete_15m']}",
             f"- Tamamlanan 60 dk: {report['complete_60m']}",
             f"- Tamamlanan 60 dk (ATK canlı): {report['complete_60m_live_feed']}",
+            "",
+            "## PAPER durumu",
+            f"- Bakiye: {report.get('paper_balance_usdt')} USDT",
+            f"- Açık pozisyon: {report.get('open_paper_positions', 0)}",
             "",
             "## Son karar",
         ]
