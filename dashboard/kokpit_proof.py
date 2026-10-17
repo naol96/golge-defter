@@ -9,6 +9,7 @@ from pathlib import Path
 import streamlit as st
 
 from contracts.models import ConstitutionRules
+from core.user_rules import apply_user_request
 
 st.set_page_config(page_title="Gölge Defter — Live Proof", layout="wide")
 st.title("GÖLGE DEFTER — Live Proof")
@@ -115,6 +116,20 @@ with st.container(border=True):
         """
     ).fetchall()
     st.dataframe([dict(r) for r in decisions], use_container_width=True)
+
+with st.container(border=True):
+    st.subheader("5 · Canlı hata testi (simülasyon, DB yazmaz)")
+    st.caption("Teslim videosu: örn. 'Bakiyemin %80'i ile al' veya 'Makas en fazla %0.03 olsun'")
+    user_text = st.text_input("Kullanıcı kuralı", value="Bakiyemin %80'i ile al")
+    if user_text.strip():
+        eff, _, msg = apply_user_request(rules, user_text)
+        st.info(msg)
+        st.write(
+            {
+                "etkin_tavan": f"%{eff.max_position_fraction * 100:g}",
+                "etkin_makas": f"%{eff.max_spread_fraction * 100:g}",
+            }
+        )
 
 conn.close()
 st.caption(f"Otomatik yenileme için sayfayı ~{refresh}s aralıkla yenileyin veya `streamlit run dashboard/kokpit_proof.py`.")

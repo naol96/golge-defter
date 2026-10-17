@@ -50,6 +50,24 @@ def tighten_position_limit(
     )
 
 
+def tighten_spread_limit(
+    constitution: ConstitutionRules, requested_fraction: Decimal
+) -> tuple[ConstitutionRules, str]:
+    from dataclasses import replace
+
+    fraction = _number(requested_fraction, "requested_fraction")
+    if fraction <= 0 or fraction > 1:
+        return constitution, "Geçersiz makas oranı; mevcut makas tavanı korundu."
+    if fraction > constitution.max_spread_fraction:
+        return constitution, (
+            f"Talep %{fraction * 100:g} mevcut makas tavanından gevşek; "
+            f"etkin tavan %{constitution.max_spread_fraction * 100:g} korundu."
+        )
+    return replace(constitution, max_spread_fraction=fraction), (
+        f"Makas tavanı %{fraction * 100:g} olarak sıkılaştırıldı."
+    )
+
+
 def evaluate(
     *,
     constitution: ConstitutionRules,

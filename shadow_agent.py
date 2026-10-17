@@ -11,6 +11,7 @@ from adapters.mock_market import MockMarketAdapter
 from adapters.okx_atk import OkxAtkMarketAdapter
 from contracts.models import ConstitutionRules
 from core.analyst import resolve_signal
+from core.user_rules import apply_user_request
 from core.decision_engine import run_decision_cycle, utc_day
 from core.position_monitor import monitor_open_positions
 from core.shadow_evaluator import evaluate_due_shadows
@@ -31,9 +32,13 @@ def run_cycle(
     symbols: list[str],
     source: str,
     analyst: str,
+    user_rule: str = "",
 ) -> None:
     adapter = OkxAtkMarketAdapter() if source == "atk" else MockMarketAdapter()
     rules = ConstitutionRules()
+    if user_rule.strip():
+        rules, _, msg = apply_user_request(rules, user_rule)
+        logging.info("user_rule: %s", msg)
     for symbol in symbols:
         now = int(time.time())
         day = utc_day(now)
@@ -65,6 +70,11 @@ def main() -> None:
     parser.add_argument("--analyst", choices=["demo", "llm"], default="demo")
     parser.add_argument("--interval", type=int, default=60)
     parser.add_argument("--symbols", nargs="+", default=list(DEFAULT_SYMBOLS))
+    parser.add_argument(
+        "--user-rule",
+        default="",
+        help="Doğal dil sıkılaştırma (ör. 'Makas en fazla %%0.03 olsun')",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -84,7 +94,13 @@ def main() -> None:
         args.db,
     )
     while not _STOP:
-        run_cycle(db, symbols=args.symbols, source=args.source, analyst=args.analyst)
+        run_cycle(
+            db,
+            symbols=args.symbols,
+            source=args.source,
+            analyst=args.analyst,
+            user_rule=args.user_rule,
+        )
         time.sleep(max(5, args.interval))
     logging.info("worker_stop")
 
