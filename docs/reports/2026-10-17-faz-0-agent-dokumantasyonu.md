@@ -20,12 +20,20 @@ Depoda çalışacak ajanlar için minimal rol rehberleri, ortak disiplin ve faz 
 | `docs/reports/.gitkeep` | Rapor dizini |
 | `README.md` | Dosya listesine agent belgeleri eklendi |
 
+```bash
+git show --stat fd6c12c | tail -n +2
+# 13 files changed, 436 insertions(+)
+```
+
 ## Test sonuçları
 
 | Komut | Sonuç |
 | --- | --- |
-| `pytest -q` | PASS (12 test) |
-| `python -m golge_defter.demo` | Değişiklik yok |
+| `pytest -q -n auto` | PASS (12) — `pytest-xdist` dev bağımlılığı ile |
+| `python -m golge_defter.demo` | PASS (smoke, kod değişmedi) |
+| CI | bekliyor |
+
+Paralel test notu: tek test dosyası (`test_risk.py`); `-n auto` gelecek fazlarda `test_market.py` ile birlikte koşturulacak.
 
 ## Sonraki faz
 
