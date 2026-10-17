@@ -16,6 +16,21 @@ export const ROUTE_LABELS: Record<Route, string> = {
 
 const STALE_AFTER_S = 120;
 
+/** Defter sayfası ve gölgesi: alınan kararlar düz satır, alınmayanlar gölgede kesikli satır. */
+export function LedgerMark({ size = 30 }: { size?: number }) {
+  return (
+    <svg className="ledger-mark" width={size} height={size} viewBox="0 0 32 32" fill="none">
+      <g className="ledger-shadow">
+        <rect x="11" y="9" width="16" height="20" rx="3.5" fill="currentColor" opacity="0.36" />
+        <path d="M15 24.5h8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeDasharray="1.6 2.6" opacity="0.7" />
+      </g>
+      <rect className="ledger-page" x="5" y="3" width="16" height="20" rx="3.5" stroke="currentColor" strokeWidth="1.9" />
+      <path d="M9.5 9h7M9.5 13h5" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" />
+      <path d="M9.5 17h7" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeDasharray="1.6 2.6" opacity="0.6" />
+    </svg>
+  );
+}
+
 export function Topbar({
   snap,
   route,
@@ -54,13 +69,15 @@ export function Topbar({
   return (
     <header className="topbar">
       <div className="topbar-row">
-        <a className="brand" href="#/genel" aria-label="Gölge Defter ana sayfa">
+        <a className="brand" href="#/genel" aria-label="shadow ledger ana sayfa">
           <span className="brand-mark" aria-hidden="true">
-            g.
+            <LedgerMark />
           </span>
           <span className="brand-text">
-            gölge defter
-            <small>Yatırım anayasası & karar hafızası</small>
+            <span>
+              shadow ledger<span className="brand-dot">.</span>
+            </span>
+            <small>Alınmayan kararların gölgesini ölçer</small>
           </span>
         </a>
 

@@ -522,7 +522,7 @@ function Footer({ snap, updatedAt, paused }: { snap: Snapshot | null; updatedAt:
   return (
     <footer className="footer">
       <span className="footer-brand">
-        gölge defter <small>Kararın diğer yüzü.</small>
+        shadow ledger <small>Alınmayan kararın da kaydı var.</small>
       </span>
       <span>
         {updatedAt ? `Güncellendi ${new Date(updatedAt).toLocaleTimeString("tr-TR")}` : "Bağlanıyor…"}

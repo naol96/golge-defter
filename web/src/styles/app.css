@@ -454,6 +454,31 @@ kbd {
   font-size: 19px;
   letter-spacing: -0.04em;
 }
+.ledger-page {
+  fill: var(--brand);
+}
+.ledger-shadow {
+  animation: ledger-drift 6s ease-in-out infinite alternate;
+}
+@keyframes ledger-drift {
+  from {
+    transform: translate(-1.5px, -1.5px);
+  }
+  to {
+    transform: translate(0.5px, 0.5px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ledger-shadow {
+    animation: none;
+  }
+}
+.brand-dot {
+  color: var(--brand);
+}
+:root[data-theme="light"] .brand-dot {
+  color: #3f8f4f;
+}
 .brand-text {
   display: flex;
   flex-direction: column;
