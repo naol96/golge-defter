@@ -7,7 +7,7 @@ import time
 from adapters.mock_market import MockMarketAdapter
 from adapters.okx_atk import OkxAtkMarketAdapter
 from contracts.models import ConstitutionRules
-from core.analyst import demo_signal
+from core.analyst import resolve_signal
 from core.decision_engine import run_decision_cycle, utc_day
 from core.position_monitor import monitor_open_positions
 from core.shadow_evaluator import evaluate_due_shadows
@@ -18,13 +18,14 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Gölge Defter MVP (PAPER)")
     parser.add_argument("--symbol", default="AVAX-USDT")
     parser.add_argument("--source", choices=["atk", "mock"], default="atk")
+    parser.add_argument("--analyst", choices=["demo", "llm"], default="demo")
     parser.add_argument("--db", default="data/golge.db")
     args = parser.parse_args()
 
     db = Database(args.db)
     adapter = OkxAtkMarketAdapter() if args.source == "atk" else MockMarketAdapter()
     market = adapter.fetch_snapshot(args.symbol)
-    signal = demo_signal(market)
+    signal = resolve_signal(market, analyst=args.analyst)
     now = int(time.time())
     decision, ref_id = run_decision_cycle(
         db, rules=ConstitutionRules(), signal=signal, market=market, now=now

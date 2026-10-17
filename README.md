@@ -2,7 +2,7 @@
 
 **Shadow Ledger + Investment Constitution** — OKX TR × Team1 Türkiye Agentic Hackathon (Ankara, 17 Ekim 2026)
 
-> **Durum:** Başlangıç deposu / erken aşama prototip. Piyasa bağlantısı ve OKX Agent Trade Kit (ATK) entegrasyonu henüz uygulanmadı. Bu depoda gerçek emir gönderimi **yoktur**.
+> **Durum:** Hackathon MVP (PAPER). OKX ATK **salt okunur** piyasa verisi desteklenir; gerçek emir gönderimi **yoktur**.
 
 ## Amaç
 
@@ -28,7 +28,7 @@ Kâr vaat eden bir alım satım botu yerine, yapay zekâ sinyallerini determinis
 
 ## Mevcut prototip
 
-Python bağımlılığı olmadan çalışabilen deterministik **risk/pozisyon karar motoru** ve birim testleri mevcut. Gerçek OKX fiyatları çekilmez, LLM çağrısı yapılmaz ve emir gönderilmez.
+Deterministik **risk/pozisyon karar motoru**, SQLite Gölge Defter, 15/60 dk değerlendirme ve isteğe bağlı LLM analist (`--analyst llm`, fail-closed PASS).
 
 ```bash
 python -m venv .venv
@@ -36,6 +36,9 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 python -m pip install -e '.[dev]'
 pytest -q
 python -m golge_defter.demo
+python main.py --source atk --symbol BTC-USDT
+python report.py --db data/golge.db
+bash start_atk.sh   # arka planda ATK_LIVE_MARKET worker
 ```
 
 Demo senaryoları **MOCK / SIMULATED** olarak etiketlenmiştir; gerçek piyasa verisi veya gerçek başarı ölçümü değildir.
@@ -43,7 +46,7 @@ Demo senaryoları **MOCK / SIMULATED** olarak etiketlenmiştir; gerçek piyasa v
 ## Hedef akış
 
 ```text
-OKX ATK / onaylı veri adaptörü (gelecek) 
+OKX ATK / onaylı veri adaptörü (`ATK_LIVE_MARKET`)
            ↓
 Analist ajan — nitel BUY / PASS (gelecek)
            ↓
@@ -56,7 +59,10 @@ Yatırım Anayasası / risk kuralları
 
 ## Dosyalar
 
-- `src/golge_defter/risk.py`: Temel anayasa ve risk değerlendirme motoru.
+- `shadow_agent.py` + `start_atk.sh`: Canlı veri işçisi (PAPER döngü).
+- `report.py`: Tek sayfalık kanıt raporu (canlı/fixture ayrımı).
+- `PLAN_1840.md`: 18:40 teslim sprint planı.
+- `src/golge_defter/risk.py`: Temel anayasa ve risk değerlendirme motoru (legacy testler).
 - `src/golge_defter/demo.py`: Açıkça simüle edilmiş kullanım örneği.
 - `tests/`: Kritik güvenlik kontrollerinin birim testleri.
 - `docs/architecture.md`: Mimari, güvenlik ve değerlendirme standartları.

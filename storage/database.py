@@ -85,11 +85,36 @@ class Database:
                   pnl_usdt TEXT,
                   evaluated_at INTEGER,
                   note TEXT DEFAULT '',
+                  feed_source TEXT DEFAULT '',
                   PRIMARY KEY (shadow_id, horizon_minutes),
                   FOREIGN KEY (shadow_id) REFERENCES shadow_trades(id)
                 );
+
+                CREATE TABLE IF NOT EXISTS decisions (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  symbol TEXT NOT NULL,
+                  signal_action TEXT NOT NULL,
+                  signal_reason TEXT NOT NULL,
+                  signal_origin TEXT NOT NULL,
+                  status TEXT NOT NULL,
+                  rule TEXT NOT NULL,
+                  explanation TEXT NOT NULL,
+                  notional_usdt TEXT NOT NULL,
+                  market_source TEXT NOT NULL,
+                  ref_id INTEGER,
+                  created_at INTEGER NOT NULL
+                );
+
+                CREATE VIEW IF NOT EXISTS paper_positions AS
+                SELECT * FROM positions;
                 """
             )
+            self._ensure_column(conn, "shadow_evaluations", "feed_source", "TEXT DEFAULT ''")
+
+    def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
+        cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {decl}")
 
     def get_paper_balance(self) -> Decimal:
         with self.session() as conn:
@@ -170,3 +195,42 @@ class Database:
                     (shadow_id, horizon),
                 )
             return shadow_id
+
+    def insert_decision(
+        self,
+        *,
+        symbol: str,
+        signal_action: str,
+        signal_reason: str,
+        signal_origin: str,
+        status: str,
+        rule: str,
+        explanation: str,
+        notional_usdt: Decimal,
+        market_source: str,
+        ref_id: int | None,
+        created_at: int,
+    ) -> int:
+        with self.session() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO decisions
+                (symbol, signal_action, signal_reason, signal_origin, status, rule,
+                 explanation, notional_usdt, market_source, ref_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    symbol,
+                    signal_action,
+                    signal_reason,
+                    signal_origin,
+                    status,
+                    rule,
+                    explanation,
+                    str(notional_usdt),
+                    market_source,
+                    ref_id,
+                    created_at,
+                ),
+            )
+            return int(cur.lastrowid)

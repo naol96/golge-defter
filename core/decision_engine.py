@@ -54,4 +54,17 @@ def run_decision_cycle(
             now=now,
         )
         ref_id = pos.id
+    db.insert_decision(
+        symbol=signal.symbol,
+        signal_action=signal.action,
+        signal_reason=signal.reason,
+        signal_origin=signal.origin,
+        status=decision.status,
+        rule=decision.rule,
+        explanation=decision.explanation,
+        notional_usdt=decision.notional_usdt,
+        market_source=market.source,
+        ref_id=ref_id,
+        created_at=now,
+    )
     return decision, ref_id

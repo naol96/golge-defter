@@ -39,10 +39,10 @@ def evaluate_due_shadows(db: Database, market: MarketSnapshot, now: int) -> int:
             cur = conn.execute(
                 """
                 UPDATE shadow_evaluations
-                SET status='COMPLETE', exit_bid=?, pnl_usdt=?, evaluated_at=?, note=?
+                SET status='COMPLETE', exit_bid=?, pnl_usdt=?, evaluated_at=?, note=?, feed_source=?
                 WHERE shadow_id=? AND horizon_minutes=? AND status='PENDING'
                 """,
-                (str(market.bid), str(pnl), now, note, row["id"], horizon),
+                (str(market.bid), str(pnl), now, note, market.source, row["id"], horizon),
             )
             updated += cur.rowcount
     return updated

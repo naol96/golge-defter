@@ -39,3 +39,64 @@ def demo_signal(market: MarketSnapshot) -> AnalystSignal:
 def parse_analyst_json(text: str) -> AnalystSignal:
     return validate_analyst_payload(json.loads(text))
 
+
+def llm_signal(market: MarketSnapshot) -> AnalystSignal:
+    """Optional LLM analyst; fail-closed PASS when unavailable or invalid."""
+    import os
+    import urllib.error
+    import urllib.request
+
+    api_key = os.environ.get("OPENAI_API_KEY", "").strip()
+    if not api_key:
+        return AnalystSignal(
+            symbol=market.symbol,
+            action="PASS",
+            reason="LLM_FAIL_CLOSED: OPENAI_API_KEY yapılandırılmadı.",
+            origin="LLM",
+        )
+    prompt = (
+        "Yalnızca JSON döndür: "
+        '{"symbol":"' + market.symbol + '","action":"BUY veya PASS","reason":"tek cümle"}'
+    )
+    body = json.dumps(
+        {
+            "model": os.environ.get("GOLGE_LLM_MODEL", "gpt-4o-mini"),
+            "messages": [
+                {
+                    "role": "system",
+                    "content": "Kripto analistisin. Yalnızca BUY veya PASS öner. Emir/tutar üretme.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            "temperature": 0,
+        }
+    ).encode()
+    req = urllib.request.Request(
+        "https://api.openai.com/v1/chat/completions",
+        data=body,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            payload = json.loads(resp.read().decode())
+        text = payload["choices"][0]["message"]["content"].strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        return parse_analyst_json(text)
+    except (urllib.error.URLError, TimeoutError, KeyError, ValueError, json.JSONDecodeError):
+        return AnalystSignal(
+            symbol=market.symbol,
+            action="PASS",
+            reason="LLM_FAIL_CLOSED: model çıktısı doğrulanamadı.",
+            origin="LLM",
+        )
+
+
+def resolve_signal(market: MarketSnapshot, analyst: str = "demo") -> AnalystSignal:
+    if analyst == "llm":
+        return llm_signal(market)
+    return demo_signal(market)

@@ -13,9 +13,15 @@ from contracts.models import MarketSnapshot
 
 
 class OkxAtkMarketAdapter(MarketAdapter):
-    def __init__(self, site: str = "global", min_order_usdt: Decimal = Decimal("10")) -> None:
+    def __init__(
+        self,
+        site: str = "global",
+        min_order_usdt: Decimal = Decimal("10"),
+        timeout_seconds: float = 3.0,
+    ) -> None:
         self.site = site
         self.min_order_usdt = min_order_usdt
+        self.timeout_seconds = timeout_seconds
 
     def _call_tool(self, name: str, arguments: dict) -> dict:
         cmd = [
@@ -115,13 +121,20 @@ class OkxAtkMarketAdapter(MarketAdapter):
         if not row:
             raise RuntimeError("ticker missing data")
         tick = row[0]
-        ts_ms = int(tick.get("ts") or 0)
-        captured_at = int(ts_ms / 1000) if ts_ms > 10_000_000_000 else int(time.time())
+        fetched_at = int(time.time())
+        raw_ts = int(tick.get("ts") or 0)
+        if raw_ts > 10_000_000_000:
+            tick_at = int(raw_ts / 1000)
+        elif raw_ts > 1_000_000_000:
+            tick_at = raw_ts
+        else:
+            tick_at = fetched_at
+        captured_at = tick_at if abs(fetched_at - tick_at) <= 10 else fetched_at
         return MarketSnapshot(
             symbol=symbol,
             bid=Decimal(str(tick["bidPx"])),
             ask=Decimal(str(tick["askPx"])),
             captured_at=captured_at,
-            source="ATK",
+            source="ATK_LIVE_MARKET",
             min_order_usdt=self.min_order_usdt,
         )

@@ -10,7 +10,13 @@ D = Decimal
 
 AllowedAction = Literal["BUY", "PASS"]
 TradingMode = Literal["PAPER", "LIVE"]
-DataSource = Literal["ATK", "MOCK", "FIXTURE"]
+DataSource = Literal[
+    "ATK",
+    "ATK_LIVE_MARKET",
+    "MOCK",
+    "FIXTURE",
+    "FIXTURE_SYNTHETIC_NOT_LIVE",
+]
 
 
 class ShadowCategory(str, Enum):
@@ -111,4 +117,3 @@ class ShadowEvaluation:
     pnl_usdt: Decimal | None
     evaluated_at: int | None
     note: str = ""
-

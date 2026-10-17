@@ -17,6 +17,8 @@ dist/
 *.sqlite3
 *.key
 *.pem
+logs/
+data/*.pid
 
 # Editor / OS
 .DS_Store
