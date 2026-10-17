@@ -1,11 +1,19 @@
 <!DOCTYPE html>
-<html lang="tr">
+<html lang="tr" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <meta name="description" content="Yapay zekâ kararlarını deterministik yatırım kurallarıyla denetleyen PAPER kontrol masası." />
   <title>Gölge Defter — Kararın diğer yüzü</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231c2925'/%3E%3Cpath d='M18 16h28v8H26v16h12v-7H32v-7h14v22H18z' fill='%23c5edaa'/%3E%3C/svg%3E" />
+  <script>
+    try {
+      const savedTheme = localStorage.getItem("golge-theme");
+      if (savedTheme === "light" || savedTheme === "dark") {
+        document.documentElement.dataset.theme = savedTheme;
+      }
+    } catch { /* Keep the default theme when storage is unavailable. */ }
+  </script>
   <link rel="stylesheet" href="/assets/styles.css" />
 </head>
 <body>
@@ -13,7 +21,7 @@
 <header class="topbar">
   <a class="brand" href="#"><span class="brand-mark" aria-hidden="true">g.</span><span>gölge defter<span class="sub">Yatırım anayasası & karar hafızası</span></span></a>
   <nav aria-label="Ana gezinme"><a href="#main">Kontrol masası</a><a href="#panel-shadow">Gölge kayıtlar</a><a href="#panel-constitution">Anayasa</a></nav>
-  <div class="badges"><span class="badge paper">PAPER / MOCK</span><span id="worker-badge" class="badge warn">Bağlantı bekleniyor</span><span id="rules-badge" class="badge muted">rules …</span></div>
+  <div class="badges"><button id="theme-toggle" class="theme-toggle" type="button" aria-label="Koyu tema" aria-pressed="true">Tema: Koyu</button><span class="badge paper">PAPER / MOCK</span><span id="worker-badge" class="badge warn">Bağlantı bekleniyor</span><span id="rules-badge" class="badge muted">rules …</span></div>
 </header>
 <main id="main" class="workspace">
   <section class="hero">

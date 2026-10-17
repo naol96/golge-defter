@@ -817,3 +817,66 @@ h1 {
   .data-table th, .data-table td { padding: 12px 14px; }
   .observation-summary { padding-inline: 20px; }
 }
+
+:root { color-scheme: light; }
+.theme-toggle {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 10px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: border-color .2s, background .2s;
+}
+.theme-toggle:hover { border-color: #779453; }
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #111915;
+  --surface: #19231d;
+  --ink: #e5eddf;
+  --muted: #a6b4a4;
+  --line: #354437;
+  --accent: #d2edb8;
+}
+[data-theme="dark"] .brand-mark,
+[data-theme="dark"] .badge.paper,
+[data-theme="dark"] .sim-form button {
+  background: #d2edb8;
+  color: #1b2b1b;
+  border-color: #d2edb8;
+}
+[data-theme="dark"] .sim-form button:hover { background: #b5d595; }
+[data-theme="dark"] .flow { background: #1c2c22; border: 1px solid var(--line); }
+[data-theme="dark"] .metric:last-child,
+[data-theme="dark"] .simulation { background: #21311f; }
+[data-theme="dark"] .simulation .index,
+[data-theme="dark"] .sim-result,
+[data-theme="dark"] .simulation-foot,
+[data-theme="dark"] .presets button { color: #bfd3ad; }
+[data-theme="dark"] .sim-form input,
+[data-theme="dark"] .presets button,
+[data-theme="dark"] .simulation-foot { border-color: #526348; }
+[data-theme="dark"] .presets button:hover { background: #35482b; }
+[data-theme="dark"] .data-table thead th { background: #263329; color: #c2d0b9; }
+[data-theme="dark"] .data-table th,
+[data-theme="dark"] .data-table td,
+[data-theme="dark"] .kv dt,
+[data-theme="dark"] .kv dd { border-color: var(--line); }
+[data-theme="dark"] .data-table tbody tr:nth-child(even),
+[data-theme="dark"] .kv dt:nth-of-type(even),
+[data-theme="dark"] .kv dd:nth-of-type(even) { background: #1e2a21; }
+[data-theme="dark"] .data-table tbody tr:hover { background: #2b3b2a; }
+[data-theme="dark"] .chip,
+[data-theme="dark"] .table-status.neutral { background: #303e32; color: #c7d3c0; }
+[data-theme="dark"] .badge.ok,
+[data-theme="dark"] .chip.status-APPROVED_PAPER,
+[data-theme="dark"] .table-status.positive { background: #2b432b; color: #c2e5ae; }
+[data-theme="dark"] .badge.warn,
+[data-theme="dark"] .connection-status,
+[data-theme="dark"] .chip.status-SHADOW_RISK,
+[data-theme="dark"] .chip.status-TECHNICAL_BLOCK,
+[data-theme="dark"] .table-status.blocked { background: #483525; color: #f1c49e; }
+[data-theme="dark"] .text-link:hover { color: #c2e5ae; }
+[data-theme="dark"] .skip { color: #1b2b1b; }

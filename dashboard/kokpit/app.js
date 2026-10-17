@@ -1,3 +1,17 @@
+const themeToggle = document.getElementById("theme-toggle");
+function syncThemeButton() {
+  const dark = document.documentElement.dataset.theme === "dark";
+  themeToggle.textContent = dark ? "Tema: Koyu" : "Tema: Açık";
+  themeToggle.setAttribute("aria-pressed", String(dark));
+}
+syncThemeButton();
+themeToggle.addEventListener("click", () => {
+  const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  document.documentElement.dataset.theme = theme;
+  syncThemeButton();
+  try { localStorage.setItem("golge-theme", theme); } catch { /* Theme still works without storage. */ }
+});
+
 const REFRESH_MS = 20000;
 const DB = "data/golge.db";
 
