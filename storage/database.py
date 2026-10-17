@@ -49,6 +49,14 @@ class Database:
                 INSERT OR IGNORE INTO paper_state (id, balance_usdt, daily_loss_usdt, daily_loss_day)
                 VALUES (1, '100', '0', '');
 
+                CREATE TABLE IF NOT EXISTS paper_state_meta (
+                  id INTEGER PRIMARY KEY CHECK (id = 1),
+                  day_start_balance_usdt TEXT NOT NULL DEFAULT '100',
+                  day_start_day TEXT NOT NULL DEFAULT ''
+                );
+                INSERT OR IGNORE INTO paper_state_meta (id, day_start_balance_usdt, day_start_day)
+                VALUES (1, '100', '');
+
                 CREATE TABLE IF NOT EXISTS positions (
                   id INTEGER PRIMARY KEY AUTOINCREMENT,
                   symbol TEXT NOT NULL,
@@ -110,6 +118,7 @@ class Database:
                 """
             )
             self._ensure_column(conn, "shadow_evaluations", "feed_source", "TEXT DEFAULT ''")
+            self._ensure_column(conn, "decisions", "rules_version", "TEXT DEFAULT ''")
 
     def _ensure_column(self, conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
         cols = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
@@ -148,6 +157,44 @@ class Database:
                 "UPDATE paper_state SET daily_loss_usdt = ?, daily_loss_day = ? WHERE id = 1",
                 (str(current + delta), utc_day),
             )
+
+    def get_day_start_balance(self, utc_day: str) -> Decimal:
+        with self.session() as conn:
+            row = conn.execute(
+                "SELECT day_start_balance_usdt, day_start_day FROM paper_state_meta WHERE id = 1"
+            ).fetchone()
+            if row is None:
+                bal = conn.execute("SELECT balance_usdt FROM paper_state WHERE id = 1").fetchone()
+                return Decimal(str(bal["balance_usdt"]))
+            if row["day_start_day"] != utc_day:
+                bal = conn.execute("SELECT balance_usdt FROM paper_state WHERE id = 1").fetchone()
+                balance = Decimal(str(bal["balance_usdt"]))
+                conn.execute(
+                    "UPDATE paper_state_meta SET day_start_balance_usdt = ?, day_start_day = ? WHERE id = 1",
+                    (str(balance), utc_day),
+                )
+                return balance
+            return Decimal(str(row["day_start_balance_usdt"]))
+
+    def get_open_portfolio(self) -> tuple[int, Decimal]:
+        with self.session() as conn:
+            rows = conn.execute(
+                "SELECT notional_usdt FROM positions WHERE status = 'OPEN'"
+            ).fetchall()
+        exposure = Decimal("0")
+        for row in rows:
+            exposure += Decimal(str(row["notional_usdt"]))
+        return len(rows), exposure
+
+    def get_last_close_at(self, symbol: str) -> int | None:
+        with self.session() as conn:
+            row = conn.execute(
+                "SELECT MAX(closed_at) AS ts FROM positions WHERE symbol = ? AND status = 'CLOSED'",
+                (symbol,),
+            ).fetchone()
+        if row is None or row["ts"] is None:
+            return None
+        return int(row["ts"])
 
     def insert_shadow(
         self,
@@ -210,14 +257,15 @@ class Database:
         market_source: str,
         ref_id: int | None,
         created_at: int,
+        rules_version: str = "",
     ) -> int:
         with self.session() as conn:
             cur = conn.execute(
                 """
                 INSERT INTO decisions
                 (symbol, signal_action, signal_reason, signal_origin, status, rule,
-                 explanation, notional_usdt, market_source, ref_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 explanation, notional_usdt, market_source, ref_id, created_at, rules_version)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     symbol,
@@ -231,6 +279,7 @@ class Database:
                     market_source,
                     ref_id,
                     created_at,
+                    rules_version,
                 ),
             )
             return int(cur.lastrowid)

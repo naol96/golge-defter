@@ -23,7 +23,9 @@ Kâr vaat eden bir alım satım botu yerine, yapay zekâ sinyallerini determinis
 | İzinli pariteler | `AVAX-USDT`, `BTC-USDT`, `ETH-USDT` |
 | En yüksek spread | %0,15 |
 | Stop-loss sınırı | %2,5 |
-| Günlük gerçekleşmiş zarar sınırı | 5 USDT |
+| Günlük gerçekleşmiş zarar sınırı | Gün başı bakiyenin %5'i (`rules_v2`) |
+| Açık pozisyon / toplam risk | En fazla 2 pozisyon, toplam %50 |
+| Parite bekleme | Kapanıştan sonra 15 dk |
 | Veri yaşı | En fazla 10 saniye |
 
 ## Mevcut prototip
@@ -39,6 +41,7 @@ python -m golge_defter.demo
 python main.py --source atk --symbol BTC-USDT
 python report.py --db data/golge.db
 bash start_atk.sh   # arka planda ATK_LIVE_MARKET worker
+streamlit run dashboard/kokpit_proof.py  # salt okunur 4 panel
 ```
 
 Kanıt raporu (worker `data/golge.db` kullanır; boş `live_market_paper.db` yanlış dosyadır):
@@ -73,6 +76,7 @@ Yatırım Anayasası / risk kuralları
 - `src/golge_defter/demo.py`: Açıkça simüle edilmiş kullanım örneği.
 - `tests/`: Kritik güvenlik kontrollerinin birim testleri.
 - `docs/architecture.md`: Mimari, güvenlik ve değerlendirme standartları.
+- `docs/yatirim_anayasasi.md`: Yatırım Anayasası (jüri metni + MVP tablosu).
 - `docs/roadmap.md`: Uygulama planı ve tamamlanmamış modüller.
 - `AGENTS.md` ve `docs/agents/`: Hackathon ajan rolleri, test disiplini ve faz rapor şablonu.
 - `docs/reports/`: Faz sonu değişiklik raporları.

@@ -31,8 +31,8 @@ def test_user_can_tighten_cap():
 
 
 def test_min_order_is_technical_not_risk():
-    d = decision(balance="30", min_order="10")
-    assert d.constitutional_amount_usdt == D("7.50")
+    d = decision(balance="50", min_order="15")
+    assert d.constitutional_amount_usdt == D("12.50")
     assert d.status == "TECHNICAL_BLOCK"
 
 

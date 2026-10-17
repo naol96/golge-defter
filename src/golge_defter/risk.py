@@ -48,6 +48,10 @@ def evaluate(
     min_order_usdt: Decimal,
     daily_realized_loss_usdt: Decimal,
     now: int,
+    open_position_count: int = 0,
+    open_exposure_usdt: Decimal = D("0"),
+    last_pair_close_at: int | None = None,
+    day_start_balance_usdt: Decimal | None = None,
 ) -> Decision:
     result = _evaluate(
         constitution=constitution,
@@ -67,6 +71,10 @@ def evaluate(
         daily_realized_loss_usdt=daily_realized_loss_usdt,
         now=now,
         mode="PAPER",
+        open_position_count=open_position_count,
+        open_exposure_usdt=open_exposure_usdt,
+        last_pair_close_at=last_pair_close_at,
+        day_start_balance_usdt=day_start_balance_usdt,
     )
     return Decision(
         status=result.status,

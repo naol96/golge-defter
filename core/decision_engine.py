@@ -22,7 +22,11 @@ def run_decision_cycle(
     now: int | None = None,
 ) -> tuple[DecisionResult, int | None]:
     now = int(now or time.time())
-    daily_loss = db.get_daily_loss(utc_day(now))
+    day = utc_day(now)
+    daily_loss = db.get_daily_loss(day)
+    day_start_balance = db.get_day_start_balance(day)
+    open_count, open_exposure = db.get_open_portfolio()
+    last_close = db.get_last_close_at(signal.symbol)
     decision = evaluate(
         constitution=rules,
         signal=signal,
@@ -32,6 +36,10 @@ def run_decision_cycle(
         daily_realized_loss_usdt=daily_loss,
         now=now,
         mode="PAPER",
+        open_position_count=open_count,
+        open_exposure_usdt=open_exposure,
+        last_pair_close_at=last_close,
+        day_start_balance_usdt=day_start_balance,
     )
     ref_id: int | None = None
     if decision.shadow_category is not None:
@@ -66,5 +74,6 @@ def run_decision_cycle(
         market_source=market.source,
         ref_id=ref_id,
         created_at=now,
+        rules_version=rules.rules_version,
     )
     return decision, ref_id

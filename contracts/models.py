@@ -31,8 +31,14 @@ class ConstitutionRules:
     allowed_pairs: frozenset[str] = frozenset({"AVAX-USDT", "BTC-USDT", "ETH-USDT"})
     max_spread_fraction: Decimal = D("0.0015")
     stop_loss_fraction: Decimal = D("0.025")
-    max_daily_realized_loss_usdt: Decimal = D("5")
+    max_daily_realized_loss_fraction: Decimal = D("0.05")
+    max_daily_realized_loss_usdt: Decimal = D("5")  # legacy fallback when day start unknown
+    max_open_positions: int = 2
+    max_total_exposure_fraction: Decimal = D("0.50")
+    pair_cooldown_seconds: int = 15 * 60
+    observation_min_balance_usdt: Decimal = D("40")
     max_data_age_seconds: int = 10
+    rules_version: str = "rules_v2"
 
 
 @dataclass(frozen=True)
