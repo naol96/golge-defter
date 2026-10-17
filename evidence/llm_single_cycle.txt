@@ -1,0 +1,1 @@
+{'mode': 'PAPER', 'market_source': 'MOCK', 'signal_origin': 'LLM', 'decision': 'APPROVED_PAPER', 'rule': 'OK', 'explanation': 'Sadece PAPER icraya uygun (LIVE desteklenmiyor).', 'ref_id': 1, 'bid': '24.99', 'ask': '25.00', 'data_age_s': 3, 'user_rule_message': None}
