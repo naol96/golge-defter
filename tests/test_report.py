@@ -4,7 +4,7 @@ from adapters.mock_market import MockMarketAdapter
 from contracts.models import ConstitutionRules
 from core.analyst import demo_signal
 from core.decision_engine import run_decision_cycle
-from report import build_report
+from report import build_report, format_markdown
 from storage.database import Database
 
 
@@ -33,3 +33,19 @@ def test_build_report_counts(tmp_path):
     report = build_report(db_path)
     assert report["decisions_by_status"]
     assert "notes" in report
+
+
+def test_format_markdown_includes_db(tmp_path):
+    db_path = tmp_path / "r.db"
+    db = Database(db_path)
+    market = MockMarketAdapter().fetch_snapshot("AVAX-USDT")
+    run_decision_cycle(
+        db,
+        rules=ConstitutionRules(),
+        signal=demo_signal(market),
+        market=market,
+        now=int(time.time()),
+    )
+    md = format_markdown(build_report(db_path))
+    assert "ölçüm raporu" in md
+    assert str(db_path) in md

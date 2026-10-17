@@ -41,6 +41,13 @@ python report.py --db data/golge.db
 bash start_atk.sh   # arka planda ATK_LIVE_MARKET worker
 ```
 
+Kanıt raporu (worker `data/golge.db` kullanır; boş `live_market_paper.db` yanlış dosyadır):
+
+```bash
+mkdir -p evidence
+python report.py --db data/golge.db --out evidence/measurement_report.md
+```
+
 Demo senaryoları **MOCK / SIMULATED** olarak etiketlenmiştir; gerçek piyasa verisi veya gerçek başarı ölçümü değildir.
 
 ## Hedef akış
